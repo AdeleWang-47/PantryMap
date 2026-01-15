@@ -13,6 +13,7 @@
     root: null
   };
   let wishlistModal = null;
+  let telemetryExpanded = false;
   const listControlsState = {
     type: 'all', // all | fridge | shelf
     stock: 'any', // any | high-low | low-high
@@ -216,7 +217,7 @@
     detailsPanel.classList.remove('hidden');
     detailsContent.innerHTML = renderPantryList(inView);
     attachImageFallbacks(detailsContent);
-    updateCollapseButton(false);
+    updateBackButton();
   }
 
   function renderPantryList(items) {
@@ -379,16 +380,13 @@
     attachImageFallbacks(detailsContent);
     // Initialize carousel if present
     setupCarousel(detailsContent);
-    // Load latest live pantry photo
-    loadLatestLivePhoto(pantry);
-    bindLivePhotoUploader(detailsContent, pantry);
     bindWishlistModule(detailsContent, pantry);
     
     // Show details panel
     const detailsPanel = document.getElementById('details');
     detailsPanel.classList.remove('hidden');
     detailsPanel.classList.remove('collapsed');
-    updateCollapseButton(false);
+    updateBackButton();
     
     // Pan/zoom map to marker
     const marker = markers.get(pantry.id);
@@ -418,7 +416,6 @@
     const distanceText = pantry.distance || '1 mi';
     const addressText = pantry.address || '123 1st St, Bellevue, 98005';
     const description = pantry.description || pantry.summary || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
-    const livePhotoPlaceholderTime = 'No recent uploads';
     const pantryTypeLabel = pantry.pantryType
       ? pantry.pantryType.charAt(0).toUpperCase() + pantry.pantryType.slice(1)
       : 'Pantry';
@@ -430,7 +427,7 @@
       <section class="detail-section telemetry-section">
         <div class="section-heading-row">
           <h2>Sensor data</h2>
-          ${pantry.id ? `<a class="section-link" href="./telemetry-history.html?pantryId=${encodeURIComponent(pantry.id)}">View Full History&nbsp;→</a>` : ''}
+          ${pantry.id ? `<button class="section-link" type="button" data-telemetry-expand data-pantry-id="${encodeURIComponent(pantry.id)}">View Full History&nbsp;→</button>` : ''}
         </div>
         <div class="telemetry-grid">
           <div class="telemetry-card">
@@ -458,7 +455,6 @@
         <div class="detail-hero-cover">
           ${pantryPhotoTag(photoUrl, pantry.name || 'Pantry photo', 'class="detail-hero-img"')}
           <span class="detail-hero-badge">${pantryTypeLabel}</span>
-          <button class="detail-floating-btn detail-upload" type="button" aria-label="Upload donation photo">⇪</button>
         </div>
         <div class="detail-hero-body">
           <h1 class="detail-title">${pantry.name || 'Untitled Pantry'}</h1>
@@ -478,15 +474,6 @@
           </div>
           ${renderStockGauge(totalItems)}
         </div>
-        <div class="stock-side">
-          <div class="live-photo-card" data-live-photo>
-            <div class="live-photo-thumb">
-              ${contentPhotoTag(null, 160, `${pantry.name || 'Pantry'} live pantry photo`)}
-              <span class="live-photo-ts" data-live-photo-ts>${livePhotoPlaceholderTime}</span>
-            </div>
-            <button class="live-photo-upload" type="button" data-live-photo-upload>Upload new photo</button>
-          </div>
-        </div>
       </section>
 
       <section class="detail-section wishlist-section" data-wishlist>
@@ -501,6 +488,8 @@
       </section>
 
       ${telemetryMarkup}
+
+      <section class="detail-section telemetry-history-section" data-telemetry-history hidden></section>
 
       <section class="detail-section support-section">
         <h2>Support us</h2>
@@ -544,21 +533,20 @@
 
   // Set up event listeners
   function setupEventListeners() {
-    // Close details panel
+    // Back / close details panel
     const closeBtn = document.getElementById('closeDetails');
     closeBtn.addEventListener('click', () => {
       const detailsPanel = document.getElementById('details');
-      // Toggle collapsed state instead of hide
-      const willCollapse = !detailsPanel.classList.contains('collapsed');
-      detailsPanel.classList.toggle('collapsed', willCollapse);
-      if (willCollapse) {
-        // Keep list hidden when collapsing from details; user can expand again
+      // If currently viewing a specific pantry, go back to the list view
+      if (currentPantry) {
         currentPantry = null;
+        showListForCurrentView();
       } else {
-        // Expanded back; if no pantry selected, show list
-        if (!currentPantry) showListForCurrentView();
+        // If already on the list view, keep sidebar visible (fixed display)
+        // Sidebar should always be visible, so do nothing
       }
-      updateCollapseButton(detailsPanel.classList.contains('collapsed'));
+      detailsPanel.classList.remove('collapsed');
+      updateBackButton();
     });
     
     // Status filter
@@ -573,6 +561,23 @@
     const detailsContent = document.getElementById('detailsContent');
     if (detailsContent) {
       detailsContent.addEventListener('click', (e) => {
+        const expandTelemetry = e.target.closest && e.target.closest('[data-telemetry-expand]');
+        if (expandTelemetry) {
+          e.preventDefault();
+          const pantryId = expandTelemetry.getAttribute('data-pantry-id') || (currentPantry && currentPantry.id);
+          if (pantryId && currentPantry) {
+            showTelemetryExpanded(currentPantry, pantryId);
+          }
+          return;
+        }
+
+        const collapseTelemetry = e.target.closest && e.target.closest('[data-telemetry-collapse]');
+        if (collapseTelemetry) {
+          e.preventDefault();
+          hideTelemetryExpanded();
+          return;
+        }
+
         const target = e.target.closest('.list-item');
         if (target) {
           e.preventDefault();
@@ -612,63 +617,183 @@
     });
   }
 
-  function updateCollapseButton(isCollapsed) {
+  function showTelemetryExpanded(pantry, pantryId) {
+    const detailsPanel = document.getElementById('details');
+    const container = document.querySelector('[data-telemetry-history]');
+    if (!detailsPanel || !container) return;
+
+    telemetryExpanded = true;
+    detailsPanel.classList.add('expanded');
+    container.hidden = false;
+    container.innerHTML = `
+      <div class="section-heading-row">
+        <h2>Sensor History</h2>
+        <button class="section-link" type="button" data-telemetry-collapse>Collapse ▲</button>
+      </div>
+      <div class="history-split">
+        <div class="history-card">
+          <div class="history-card-header">
+            <h2>Weight Trend</h2>
+            <span data-weight-range class="history-meta"></span>
+          </div>
+          <div class="chart-wrapper">
+            <svg data-weight-chart viewBox="0 0 720 320" role="img" aria-label="Weight sensor readings over time"></svg>
+          </div>
+          <div data-weight-legend class="history-meta"></div>
+        </div>
+        <div class="history-card">
+          <div class="history-card-header">
+            <h2>Door Events</h2>
+            <span data-door-summary class="history-meta"></span>
+          </div>
+          <div data-door-timeline class="door-timeline">
+            <div class="history-placeholder">Loading door activity…</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    loadTelemetryInto(container, pantryId);
+  }
+
+  function hideTelemetryExpanded() {
+    telemetryExpanded = false;
+    const detailsPanel = document.getElementById('details');
+    const container = document.querySelector('[data-telemetry-history]');
+    if (detailsPanel) detailsPanel.classList.remove('expanded');
+    if (container) {
+      container.hidden = true;
+      container.innerHTML = '';
+    }
+  }
+
+  async function loadTelemetryInto(container, pantryId) {
+    try {
+      const items = await window.PantryAPI.getTelemetryHistory(pantryId);
+      const parsed = parseTelemetryHistory(items);
+      renderWeightChartInto(container, parsed.weight);
+      renderDoorTimelineInto(container, parsed.doors);
+    } catch (e) {
+      console.error('Error loading telemetry history:', e);
+      container.innerHTML = `<div class="history-placeholder">Failed to load telemetry history.</div>`;
+    }
+  }
+
+  function parseTelemetryHistory(items) {
+    if (!Array.isArray(items)) return { weight: [], doors: [] };
+    const weight = [];
+    const doors = [];
+    items.forEach((item) => {
+      const ts = item.ts;
+      const weightKg = Number(item.metrics?.weightKg ?? item.metrics?.weightkg ?? NaN);
+      if (!Number.isNaN(weightKg)) weight.push({ ts, weightKg });
+      const door = item.flags?.door;
+      if (door) doors.push({ ts, status: door });
+    });
+    weight.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    doors.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    return { weight, doors };
+  }
+
+  function renderWeightChartInto(container, data) {
+    const svg = container.querySelector('[data-weight-chart]');
+    const legend = container.querySelector('[data-weight-legend]');
+    const rangeLabel = container.querySelector('[data-weight-range]');
+    if (!svg || !legend || !rangeLabel) return;
+    if (!Array.isArray(data) || data.length === 0) {
+      svg.innerHTML = '';
+      legend.textContent = 'No weight data available.';
+      rangeLabel.textContent = '';
+      return;
+    }
+    const width = svg.viewBox.baseVal.width || 720;
+    const height = svg.viewBox.baseVal.height || 320;
+    const margin = { top: 20, right: 32, bottom: 36, left: 56 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const minWeight = Math.min(...data.map((d) => d.weightKg));
+    const maxWeight = Math.max(...data.map((d) => d.weightKg));
+    const scaleY = (value) => {
+      if (maxWeight === minWeight) return margin.top + plotHeight / 2;
+      return margin.top + (maxWeight - value) * (plotHeight / (maxWeight - minWeight));
+    };
+    const scaleX = (index) => {
+      if (data.length === 1) return margin.left + plotWidth / 2;
+      return margin.left + (index / (data.length - 1)) * plotWidth;
+    };
+    const points = data.map((d, i) => `${scaleX(i)},${scaleY(d.weightKg)}`).join(' ');
+    const minTs = data[0].ts;
+    const maxTs = data[data.length - 1].ts;
+    svg.innerHTML = `
+      <rect x="${margin.left}" y="${margin.top}" width="${plotWidth}" height="${plotHeight}" fill="var(--bg)" stroke="var(--border)" stroke-width="1" rx="8"></rect>
+      <polyline fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="${points}"></polyline>
+      ${data.map((d, i) => `
+        <circle cx="${scaleX(i)}" cy="${scaleY(d.weightKg)}" r="4" fill="var(--primary)" opacity="0.9">
+          <title>${formatDateTimeMinutes(d.ts)} — ${d.weightKg.toFixed(2)} kg</title>
+        </circle>
+      `).join('')}
+    `;
+    legend.textContent = `Min ${minWeight.toFixed(2)} kg · Max ${maxWeight.toFixed(2)} kg`;
+    rangeLabel.textContent = `${formatDateTimeMinutes(minTs)} → ${formatDateTimeMinutes(maxTs)}`;
+  }
+
+  function renderDoorTimelineInto(container, data) {
+    const timeline = container.querySelector('[data-door-timeline]');
+    const summary = container.querySelector('[data-door-summary]');
+    if (!timeline || !summary) return;
+    if (!Array.isArray(data) || data.length === 0) {
+      timeline.innerHTML = '<div class="history-placeholder">No door events recorded.</div>';
+      summary.textContent = '';
+      return;
+    }
+    const totalOpen = data.filter((d) => d.status === 'open').length;
+    timeline.innerHTML = `
+      <ul class="door-events">
+        ${data.slice(-40).reverse().map((d) => `
+          <li>
+            <span class="door-pill ${d.status}">${d.status}</span>
+            <span class="door-ts">${formatDateTimeMinutes(d.ts)}</span>
+          </li>
+        `).join('')}
+      </ul>
+    `;
+    summary.textContent = `${data.length} events · ${totalOpen} openings`;
+  }
+
+  function updateBackButton() {
     const btn = document.getElementById('closeDetails');
     if (!btn) return;
-    btn.textContent = isCollapsed ? '›' : '←';
-    btn.setAttribute('aria-label', isCollapsed ? 'Expand details' : 'Back to list');
+    btn.textContent = '←';
+    const label = currentPantry ? 'Back to list' : 'Close sidebar';
+    btn.setAttribute('aria-label', label);
   }
 
-  async function loadLatestLivePhoto(pantry) {
-    if (!pantry || !pantry.id) return;
-    const container = document.querySelector('[data-live-photo]');
-    if (!container) return;
-    const img = container.querySelector('img[data-role="content-photo"]');
-    const tsEl = container.querySelector('[data-live-photo-ts]');
+
+  // Wishlist localStorage functions
+  function getWishlistStorageKey(pantryId) {
+    return `wishlist_${pantryId}`;
+  }
+
+  function loadWishlistFromStorage(pantryId) {
     try {
-      const items = await window.PantryAPI.getDonations(pantry.id, 1, 1);
-      if (Array.isArray(items) && items.length > 0) {
-        const latest = items[0];
-        const photos = latest.photoUrls || latest.photos || latest.images || [];
-        const photoUrl = Array.isArray(photos) ? photos[0] : photos;
-        if (photoUrl && img) {
-          img.src = photoUrl;
-        }
-        if (tsEl) {
-          const ts = latest.time || latest.createdAt || latest.updatedAt || latest.timestamp;
-          tsEl.textContent = ts ? formatRelativeTimestamp(ts) : 'Just now';
-        }
-        attachImageFallbacks(container);
-      } else if (tsEl) {
-        tsEl.textContent = 'No recent uploads';
-      }
+      const key = getWishlistStorageKey(pantryId);
+      const stored = localStorage.getItem(key);
+      if (!stored) return [];
+      const items = JSON.parse(stored);
+      return Array.isArray(items) ? items : [];
     } catch (error) {
-      console.error('Error loading latest live photo:', error);
-      if (tsEl) tsEl.textContent = 'Failed to load';
+      console.error('Error loading wishlist from storage:', error);
+      return [];
     }
   }
 
-  function bindLivePhotoUploader(root, pantry) {
-    if (!root) return;
-    const btn = root.querySelector('[data-live-photo-upload]');
-    if (!btn) return;
-    let input = root.querySelector('input[type="file"][data-live-photo-input]');
-    if (!input) {
-      input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.style.display = 'none';
-      input.setAttribute('data-live-photo-input', 'true');
-      root.appendChild(input);
+  function saveWishlistToStorage(pantryId, items) {
+    try {
+      const key = getWishlistStorageKey(pantryId);
+      localStorage.setItem(key, JSON.stringify(items));
+    } catch (error) {
+      console.error('Error saving wishlist to storage:', error);
     }
-    btn.onclick = () => input.click();
-    input.onchange = (event) => {
-      const file = event.target.files && event.target.files[0];
-      if (file) {
-        console.log('Selected live pantry photo for upload', pantry.id, file);
-        // TODO: implement upload flow to backend
-      }
-    };
   }
 
   function bindWishlistModule(root, pantry) {
@@ -676,148 +801,111 @@
     const grid = root.querySelector('[data-wishlist-grid]');
     const toggleBtn = root.querySelector('[data-wishlist-toggle]');
     const addBtn = root.querySelector('[data-wishlist-add]');
-    if (!grid || !toggleBtn || !addBtn) return;
+    if (!grid || !addBtn) return;
 
-    const refresh = () => loadWishlist(pantry, grid, toggleBtn);
-    addBtn.onclick = () => openWishlistModal(pantry, refresh);
-    toggleBtn.onclick = () => {
-      const expanded = toggleBtn.dataset.expanded === 'true';
-      const items = grid.__items || [];
-      renderWishlistItems(grid, toggleBtn, items, !expanded);
+    const refresh = () => {
+      const items = loadWishlistFromStorage(pantry.id);
+      renderWishlistItems(grid, toggleBtn, items, pantry.id);
     };
+
+    addBtn.onclick = () => {
+      const itemName = prompt('Enter item name:');
+      if (itemName && itemName.trim()) {
+        const items = loadWishlistFromStorage(pantry.id);
+        const newItem = {
+          id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          item: itemName.trim(),
+          quantity: 1,
+          createdAt: new Date().toISOString()
+        };
+        items.push(newItem);
+        saveWishlistToStorage(pantry.id, items);
+        refresh();
+      }
+    };
+
+    if (toggleBtn) {
+      toggleBtn.onclick = () => {
+        const expanded = toggleBtn.dataset.expanded === 'true';
+        const items = loadWishlistFromStorage(pantry.id);
+        renderWishlistItems(grid, toggleBtn, items, pantry.id, !expanded);
+      };
+    }
+
     refresh();
   }
 
-  async function loadWishlist(pantry, grid, toggleBtn) {
-    grid.innerHTML = `<div class="wishlist-empty">Loading wishlist…</div>`;
-    toggleBtn.hidden = true;
-    try {
-      const data = await window.PantryAPI.getWishlist(pantry.id);
-      let items = Array.isArray(data)
-        ? data
-        : (Array.isArray(data?.items) ? data.items : []);
-      if ((!items || items.length === 0) && Array.isArray(pantry.wishlist) && pantry.wishlist.length) {
-        items = pantry.wishlist.map((name, idx) => ({
-          id: `legacy-${idx}`,
-          item: name,
-          quantity: 1,
-          createdAt: null
-        }));
-      }
-      grid.__items = items;
-      renderWishlistItems(grid, toggleBtn, items, false);
-    } catch (error) {
-      console.error('Error loading wishlist:', error);
-      grid.innerHTML = `<div class="wishlist-empty">Unable to load wishlist right now.</div>`;
-    }
-  }
-
-  function renderWishlistItems(grid, toggleBtn, items, expanded) {
+  function renderWishlistItems(grid, toggleBtn, items, pantryId, expanded = false) {
     grid.innerHTML = '';
     if (!Array.isArray(items) || items.length === 0) {
-      grid.innerHTML = `<div class="wishlist-empty">No wishlist items in the last 7 days.</div>`;
-      toggleBtn.hidden = true;
+      grid.innerHTML = `<div class="wishlist-empty">No wishlist items yet. Click + to add items.</div>`;
+      if (toggleBtn) toggleBtn.hidden = true;
       return;
     }
-    const subset = expanded ? items : items.slice(0, 3);
+
+    const subset = expanded ? items : items.slice(0, 10);
     subset.forEach(item => {
+      const itemCard = document.createElement('div');
+      itemCard.className = 'wishlist-item-card';
+      itemCard.dataset.itemId = item.id;
+      
       const qty = Number.isFinite(item.quantity) ? item.quantity : 1;
       const created = item.createdAt ? formatRelativeTimestamp(item.createdAt) : '';
-      const chip = document.createElement('span');
-      chip.className = 'wishlist-chip';
-      chip.title = created ? `Added ${created}` : '';
-      chip.innerHTML = `
-        <span class="wishlist-chip-label">${item.item || item.name || 'Item'}</span>
-        <span class="wishlist-chip-count">(${qty})</span>
-        <span class="wishlist-chip-delta">+${Math.max(1, qty)}</span>
+      
+      itemCard.innerHTML = `
+        <div class="wishlist-item-content">
+          <span class="wishlist-item-name" data-item-name>${escapeHtml(item.item || item.name || 'Item')}</span>
+          <span class="wishlist-item-meta">Qty: ${qty}${created ? ` · ${created}` : ''}</span>
+        </div>
+        <div class="wishlist-item-actions">
+          <button class="wishlist-item-edit" type="button" aria-label="Edit item" data-item-edit>✎</button>
+          <button class="wishlist-item-delete" type="button" aria-label="Delete item" data-item-delete>×</button>
+        </div>
       `;
-      grid.appendChild(chip);
+
+      // Edit button
+      const editBtn = itemCard.querySelector('[data-item-edit]');
+      editBtn.onclick = () => {
+        const currentName = item.item || item.name || '';
+        const newName = prompt('Edit item name:', currentName);
+        if (newName !== null && newName.trim() && newName.trim() !== currentName) {
+          const allItems = loadWishlistFromStorage(pantryId);
+          const itemIndex = allItems.findIndex(i => i.id === item.id);
+          if (itemIndex !== -1) {
+            allItems[itemIndex].item = newName.trim();
+            saveWishlistToStorage(pantryId, allItems);
+            renderWishlistItems(grid, toggleBtn, allItems, pantryId, expanded);
+          }
+        }
+      };
+
+      // Delete button
+      const deleteBtn = itemCard.querySelector('[data-item-delete]');
+      deleteBtn.onclick = () => {
+        if (confirm(`Delete "${item.item || item.name}"?`)) {
+          const allItems = loadWishlistFromStorage(pantryId);
+          const filtered = allItems.filter(i => i.id !== item.id);
+          saveWishlistToStorage(pantryId, filtered);
+          renderWishlistItems(grid, toggleBtn, filtered, pantryId, expanded);
+        }
+      };
+
+      grid.appendChild(itemCard);
     });
 
-    if (items.length > 3) {
+    if (items.length > 10 && toggleBtn) {
       toggleBtn.hidden = false;
       toggleBtn.dataset.expanded = expanded ? 'true' : 'false';
-      toggleBtn.innerHTML = expanded ? 'Collapse ▲' : 'View All <span aria-hidden="true">⌄</span>';
-    } else {
+      toggleBtn.innerHTML = expanded ? 'Show Less ▲' : `View All (${items.length}) <span aria-hidden="true">⌄</span>`;
+    } else if (toggleBtn) {
       toggleBtn.hidden = true;
     }
   }
 
-  function openWishlistModal(pantry, onSuccess) {
-    const overlay = document.createElement('div');
-    overlay.className = 'wishlist-modal-overlay';
-    overlay.innerHTML = `
-      <div class="wishlist-modal" role="dialog" aria-modal="true">
-        <button type="button" class="wishlist-modal-close" aria-label="Close">×</button>
-        <h3>Add wishlist item</h3>
-        <form class="wishlist-form">
-          <label>
-            <span>Item name</span>
-            <input type="text" name="item" maxlength="80" required placeholder="e.g. Rice" />
-          </label>
-          <label>
-            <span>Quantity</span>
-            <input type="number" name="quantity" min="1" max="99" value="1" />
-          </label>
-          <p class="wishlist-modal-hint">Items stay visible for 7 days.</p>
-          <div class="wishlist-modal-error" aria-live="polite"></div>
-          <div class="wishlist-modal-actions">
-            <button type="button" class="wishlist-modal-cancel">Cancel</button>
-            <button type="submit" class="wishlist-modal-submit">Add item</button>
-          </div>
-        </form>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    document.body.classList.add('modal-open');
-
-    const close = () => {
-      document.body.classList.remove('modal-open');
-      overlay.remove();
-    };
-
-    overlay.querySelector('.wishlist-modal-close').onclick = close;
-    overlay.querySelector('.wishlist-modal-cancel').onclick = close;
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) close();
-    });
-    overlay.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        close();
-      }
-    });
-
-    const form = overlay.querySelector('.wishlist-form');
-    const submitBtn = overlay.querySelector('.wishlist-modal-submit');
-    const errorEl = overlay.querySelector('.wishlist-modal-error');
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      errorEl.textContent = '';
-      const formData = new FormData(form);
-      const item = String(formData.get('item') || '').trim();
-      let quantity = parseInt(formData.get('quantity'), 10);
-      if (!Number.isFinite(quantity) || quantity <= 0) quantity = 1;
-      if (!item) {
-        errorEl.textContent = 'Please enter an item name.';
-        return;
-      }
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Adding…';
-
-      try {
-        await window.PantryAPI.addWishlist(pantry.id, item, quantity);
-        close();
-        if (typeof onSuccess === 'function') onSuccess();
-      } catch (error) {
-        console.error('Error creating wishlist item:', error);
-        errorEl.textContent = 'Failed to add item. Please try again.';
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Add item';
-      }
-    });
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   // Filter pantries by status

@@ -239,12 +239,23 @@
     }
   }
 
+  function initBackLink() {
+    const link = document.querySelector('[data-role="history-back"]');
+    if (!link) return;
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.history.back();
+    });
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
+      initBackLink();
       initDownload();
       init();
     });
   } else {
+    initBackLink();
     initDownload();
     init();
   }
