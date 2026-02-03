@@ -1,9 +1,24 @@
 (function () {
   const API = {};
 
+  function normalizePantryId(id) {
+    if (id == null) return '';
+    const trimmed = String(id).trim();
+    if (!trimmed) return '';
+    const prefixed = trimmed.match(/^(?:pantry|p)[-_]?(\d+)$/i);
+    if (prefixed) {
+      const parsed = Number.parseInt(prefixed[1], 10);
+      return Number.isFinite(parsed) ? String(parsed) : '';
+    }
+    const numeric = trimmed.match(/\d+/);
+    if (!numeric) return '';
+    const parsed = Number.parseInt(numeric[0], 10);
+    return Number.isFinite(parsed) ? String(parsed) : '';
+  }
+
   function normalizePantry(p) {
     return {
-      id: String(p.id),
+      id: normalizePantryId(p.id),
       name: p.name ?? "Untitled Pantry",
       status: p.status ?? "open",
       address: p.address ?? "",
@@ -25,8 +40,7 @@
   }
 
   // API base URL - change to your backend URL
-  // TEMP: point to local backend port 5080 for end-to-end testing
-  const API_BASE_URL = 'http://127.0.0.1:5080/api';
+  const API_BASE_URL = 'http://localhost:7071/api';
 
   API.getPantries = async function getPantries(filters = {}) {
     try {
@@ -76,10 +90,13 @@
   };
 
   API.getMessages = async function getMessages(pantryId) {
+    const normalizedPantryId = normalizePantryId(pantryId);
+    if (!normalizedPantryId) return [];
     try {
-      const res = await fetch(`${API_BASE_URL}/messages/${pantryId}`, { cache: 'no-store' });
+      const res = await fetch(`${API_BASE_URL}/messages?pantryId=${encodeURIComponent(normalizedPantryId)}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      return await res.json();
+      const data = await res.json();
+      return Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
     } catch (error) {
       console.error('Error fetching messages:', error);
       return [];
@@ -87,11 +104,18 @@
   };
 
   API.postMessage = async function postMessage(pantryId, content, userName, userAvatar, photos = []) {
+    const normalizedPantryId = normalizePantryId(pantryId);
     try {
       const res = await fetch(`${API_BASE_URL}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pantryId, content, userName, userAvatar, photos })
+        body: JSON.stringify({
+          pantryId: normalizedPantryId,
+          content,
+          userName,
+          userAvatar,
+          photos,
+        }),
       });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       return await res.json();
@@ -104,40 +128,54 @@
   // Donations
 
   API.getDonations = async function getDonations(pantryId, page = 1, pageSize = 5) {
+    const normalizedPantryId = normalizePantryId(pantryId);
     try {
-      const res = await fetch(`${API_BASE_URL}/donations?pantryId=${encodeURIComponent(pantryId)}&page=${page}&pageSize=${pageSize}`, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const res = await fetch(`${API_BASE_URL}/donations?pantryId=${encodeURIComponent(normalizedPantryId)}&page=${page}&pageSize=${pageSize}`, { cache: 'no-store' });
+      if (!res.ok) {
+        if (res.status === 404) {
+          return [];
+        }
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       return data.items || [];
     } catch (e) {
-      console.error('Error fetching donations:', e);
+      console.warn('Donations endpoint unavailable, returning empty list.', e);
       return [];
     }
   };
 
-  // Wishlist
-  API.getWishlist = async function getWishlist(pantryId) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/wishlist?pantryId=${encodeURIComponent(pantryId)}`, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const data = await res.json();
-      return data.items || [];
-    } catch (e) {
-      console.error('Error fetching wishlist:', e);
-      return [];
-    }
-  };
+  API.addWishlist = async function addWishlist(pantryId, item, quantity = 1) {
+    const normalizedPantryId = normalizePantryId(pantryId);
+    const trimmedItem = typeof item === 'string' ? item.trim() : String(item || '').trim();
+    const parsedQuantity = Number.parseInt(quantity, 10);
+    const safeQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 1;
+    if (!normalizedPantryId || !trimmedItem) throw new Error('Missing pantryId or item');
 
-  API.addWishlistItem = async function addWishlistItem(pantryId, item, quantity = 1) {
+    const payload = {
+      pantryId: normalizedPantryId,
+      item: trimmedItem,
+      quantity: safeQuantity,
+    };
+
+    const url = `${API_BASE_URL}/wishlist`;
+    console.log('[Wishlist] Sending request', url, payload);
+
     try {
-      const res = await fetch(`${API_BASE_URL}/wishlist`, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pantryId, item, quantity })
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP error ${res.status}`);
+      }
+
       const data = await res.json();
-      return data.item || null;
+      console.log('[Wishlist] Received response', data);
+      return data?.agg ?? data;
     } catch (e) {
       console.error('Error adding wishlist item:', e);
       throw e;
@@ -146,8 +184,9 @@
 
   // Telemetry latest
   API.getTelemetryLatest = async function getTelemetryLatest(pantryId) {
+    const normalizedPantryId = normalizePantryId(pantryId);
     try {
-      const res = await fetch(`${API_BASE_URL}/telemetry?pantryId=${encodeURIComponent(pantryId)}&latest=true`, { cache: 'no-store' });
+      const res = await fetch(`${API_BASE_URL}/telemetry?pantryId=${encodeURIComponent(normalizedPantryId)}&latest=true`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       return data.latest || null;
@@ -159,8 +198,9 @@
 
   // Telemetry history
   API.getTelemetryHistory = async function getTelemetryHistory(pantryId, from, to) {
+    const normalizedPantryId = normalizePantryId(pantryId);
     try {
-      let url = `${API_BASE_URL}/telemetry?pantryId=${encodeURIComponent(pantryId)}`;
+      let url = `${API_BASE_URL}/telemetry?pantryId=${encodeURIComponent(normalizedPantryId)}`;
       if (from) url += `&from=${encodeURIComponent(from)}`;
       if (to) url += `&to=${encodeURIComponent(to)}`;
       const res = await fetch(url, { cache: 'no-store' });
@@ -173,70 +213,18 @@
     }
   };
 
-  function getStoredApiKey() {
-    try {
-      return localStorage.getItem('pantryApiKey') || '';
-    } catch (e) {
-      return '';
-    }
-  }
-
-  function setStoredApiKey(value) {
-    try {
-      localStorage.setItem('pantryApiKey', value);
-    } catch (e) {
-      console.warn('Unable to persist API key', e);
-    }
-  }
-
-  async function authorizedFetch(url, options = {}, retry = true) {
-    const headers = new Headers(options.headers || {});
-    const apiKey = getStoredApiKey();
-    if (apiKey) headers.set('x-api-key', apiKey);
-    const response = await fetch(url, { ...options, headers });
-    if (response.status === 401 && retry) {
-      const key = window.prompt('API key required to modify wishlist. Please enter API key:');
-      if (key && key.trim()) {
-        setStoredApiKey(key.trim());
-        return authorizedFetch(url, options, false);
-      }
-    }
-    return response;
-  }
-
   // Wishlist
   API.getWishlist = async function getWishlist(pantryId) {
-    if (!pantryId) return [];
+    const normalizedPantryId = normalizePantryId(pantryId);
+    if (!normalizedPantryId) return [];
     try {
-      const res = await fetch(`${API_BASE_URL}/wishlist?pantryId=${encodeURIComponent(pantryId)}`, { cache: 'no-store' });
+      const res = await fetch(`${API_BASE_URL}/wishlist?pantryId=${encodeURIComponent(normalizedPantryId)}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      if (Array.isArray(data)) return data;
-      return Array.isArray(data.items) ? data.items : [];
+      return Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
     } catch (e) {
       console.error('Error fetching wishlist:', e);
       return [];
-    }
-  };
-
-  API.addWishlist = async function addWishlist(pantryId, item, quantity = 1) {
-    if (!pantryId || !item) throw new Error('Missing pantryId or item');
-    try {
-      const res = await authorizedFetch(`${API_BASE_URL}/wishlist`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pantryId, item, quantity })
-      });
-      const data = await res.json();
-      if (!res.ok || data.ok === false) {
-        throw new Error(data?.message || `HTTP error! status: ${res.status}`);
-      }
-      if (data.item) return data.item;
-      if (data.items && data.items.length) return data.items[0];
-      return data;
-    } catch (e) {
-      console.error('Error adding wishlist item:', e);
-      throw e;
     }
   };
 

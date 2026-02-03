@@ -12,6 +12,11 @@
     pantryId: null,
     root: null
   };
+  let messageState = {
+    items: [],
+    pantryId: null,
+    root: null
+  };
   let wishlistModal = null;
   let telemetryExpanded = false;
   const listControlsState = {
@@ -555,62 +560,11 @@
         <div class="leave-message-card">
           <button class="message-cta" type="button">Write a message →</button>
 
-          <ul class="message-list" aria-live="polite">
-            <li class="message-card">
-              <div class="message-avatar">${avatarTag(null, 40, 'Community member')}</div>
-              <div class="message-body">
-                <p>Thank you so much for running the pantry with such dedication! Your hard work makes a huge difference in our community!</p>
-                <div class="message-media">
-                  ${contentPhotoTag(null, 60)}
-                  ${contentPhotoTag(null, 60)}
-                </div>
-                <time datetime="">1 day ago</time>
-              </div>
-            </li>
-            <li class="message-card">
-              <div class="message-avatar">${avatarTag(null, 40, 'Community member')}</div>
-              <div class="message-body">
-                <p>Appreciate the consistent restocks. The fresh produce has been a lifesaver for our family!</p>
-                <time datetime="">2 days ago</time>
-              </div>
-            </li>
-          </ul>
-        </div>
-
-        <!-- Message form modal (hidden until triggered) -->
-        <div class="modal-overlay message-form-overlay" data-message-form-overlay hidden>
-          <div class="modal-card message-form-card" role="dialog" aria-modal="true" aria-label="Leave a message">
-            <div class="modal-header">
-              <h3 class="modal-title">💬 Leave a Message</h3>
-              <button class="modal-close" type="button" aria-label="Close message form" data-message-close>✕</button>
-            </div>
-            <form class="message-form" data-message-form>
-              <div class="form-row">
-                <label for="messageText">Message</label>
-                <textarea id="messageText" data-message-text rows="5" class="message-textarea" placeholder="Share your experience with this pantry..." aria-label="Message text"></textarea>
-              </div>
-              <div class="message-meta">
-                <div class="message-hint">Be kind and constructive.</div>
-                <div class="message-count" data-message-count>0/500</div>
-              </div>
-              <div class="message-buttons">
-                <button type="button" class="btn-cancel" data-message-cancel>Cancel</button>
-                <button type="submit" class="btn-send" data-message-submit>Send ✓</button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        <!-- Success dialog -->
-        <div class="modal-overlay success-overlay" data-success-overlay hidden>
-          <div class="modal-card success-card" role="alertdialog" aria-modal="true">
-            <div class="success-icon">✓</div>
-            <h3>留言已成功提交！</h3>
-            <div class="success-preview" data-success-preview></div>
-            <div class="modal-actions">
-              <button type="button" class="modal-btn primary" data-success-close>确定</button>
-            </div>
-          </div>
+      <section class="detail-section message-section">
+        <h2>Leave a message</h2>
+        <button class="message-cta" type="button" data-message-add>Leave a message to the host and the community</button>
+        <div class="message-list" data-message-list>
+          <div class="message-empty">Loading messages…</div>
         </div>
       </section>
     `;
@@ -1163,7 +1117,55 @@
     refresh();
   }
 
-  function renderWishlistItems(grid, toggleBtn, items, pantryId, expanded = false) {
+  function normalizeWishlistItems(rawItems = []) {
+    if (!Array.isArray(rawItems)) return [];
+    return rawItems
+      .map((entry, index) => {
+        if (!entry) return null;
+        const itemDisplay = String(entry.itemDisplay ?? entry.id ?? '').trim();
+        if (!itemDisplay) return null;
+        const parsedCount = Number(entry.count);
+        const count = Number.isFinite(parsedCount) && parsedCount > 0 ? parsedCount : 1;
+        return {
+          id: entry.id ?? `wishlist-${index}`,
+          itemDisplay,
+          count,
+          updatedAt: entry.updatedAt ?? entry.createdAt ?? null,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  async function loadWishlist(pantry, grid, toggleBtn) {
+    grid.innerHTML = `<div class="wishlist-empty">Loading wishlist…</div>`;
+    toggleBtn.hidden = true;
+    try {
+      const data = await window.PantryAPI.getWishlist(pantry.id);
+      let items = Array.isArray(data)
+        ? data
+        : (Array.isArray(data?.items) ? data.items : []);
+      if ((!items || items.length === 0) && Array.isArray(pantry.wishlist) && pantry.wishlist.length) {
+        items = pantry.wishlist.map((name, idx) => ({
+          id: `legacy-${idx}`,
+          itemDisplay: name,
+          count: 1,
+          updatedAt: null
+        }));
+      }
+      const normalized = normalizeWishlistItems(items);
+      wishlistState.items = normalized;
+      wishlistState.expanded = false;
+      wishlistState.pantryId = pantry.id;
+      wishlistState.root = grid;
+      grid.__items = normalized;
+      renderWishlistItems(grid, toggleBtn, normalized, false);
+    } catch (error) {
+      console.error('Error loading wishlist:', error);
+      grid.innerHTML = `<div class="wishlist-empty">Unable to load wishlist right now.</div>`;
+    }
+  }
+
+  function renderWishlistItems(grid, toggleBtn, items, expanded) {
     grid.innerHTML = '';
     if (!Array.isArray(items) || items.length === 0) {
       grid.innerHTML = `<div class="wishlist-empty">No wishlist items yet. Click + to add items.</div>`;
@@ -1173,52 +1175,30 @@
 
     const subset = expanded ? items : items.slice(0, 10);
     subset.forEach(item => {
-      const itemCard = document.createElement('div');
-      itemCard.className = 'wishlist-item-card';
-      itemCard.dataset.itemId = item.id;
-      
-      const qty = Number.isFinite(item.quantity) ? item.quantity : 1;
-      const created = item.createdAt ? formatRelativeTimestamp(item.createdAt) : '';
-      
-      itemCard.innerHTML = `
-        <div class="wishlist-item-content">
-          <span class="wishlist-item-name" data-item-name>${escapeHtml(item.item || item.name || 'Item')}</span>
-          <span class="wishlist-item-meta">Qty: ${qty}${created ? ` · ${created}` : ''}</span>
-        </div>
-        <div class="wishlist-item-actions">
-          <button class="wishlist-item-edit" type="button" aria-label="Edit item" data-item-edit>✎</button>
-          <button class="wishlist-item-delete" type="button" aria-label="Delete item" data-item-delete>×</button>
-        </div>
-      `;
-
-      // Edit button
-      const editBtn = itemCard.querySelector('[data-item-edit]');
-      editBtn.onclick = () => {
-        const currentName = item.item || item.name || '';
-        const newName = prompt('Edit item name:', currentName);
-        if (newName !== null && newName.trim() && newName.trim() !== currentName) {
-          const allItems = loadWishlistFromStorage(pantryId);
-          const itemIndex = allItems.findIndex(i => i.id === item.id);
-          if (itemIndex !== -1) {
-            allItems[itemIndex].item = newName.trim();
-            saveWishlistToStorage(pantryId, allItems);
-            renderWishlistItems(grid, toggleBtn, allItems, pantryId, expanded);
-          }
+      const qty = Number.isFinite(item.count) && item.count > 0 ? item.count : 1; // Backend aggregates count
+      const timestamp = item.updatedAt || item.createdAt || null; // Prefer freshest timestamp regardless of field name
+      const itemDisplay = String(item.itemDisplay ?? item.id ?? 'Item'); // Use backend agg label
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'wishlist-chip';
+      pill.title = timestamp ? `Updated ${formatRelativeTimestamp(timestamp)}` : '';
+      pill.textContent = qty > 1 ? `${itemDisplay} × ${qty}` : itemDisplay; // Surface quantity inline when greater than one
+      pill.addEventListener('click', async () => {
+        if (!wishlistState.pantryId) return;
+        const pantryId = String(wishlistState.pantryId);
+        try {
+          await window.PantryAPI.addWishlist(pantryId, itemDisplay, 1);
+          // Refresh from backend to get latest state
+          const data = await window.PantryAPI.getWishlist(pantryId);
+          const refreshed = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+          const normalized = normalizeWishlistItems(refreshed); // Merge duplicates after re-fetch
+          wishlistState.items = normalized;
+          renderWishlistItems(grid, toggleBtn, normalized, wishlistState.expanded);
+        } catch (err) {
+          console.error('Error re-adding wishlist item:', err);
         }
-      };
-
-      // Delete button
-      const deleteBtn = itemCard.querySelector('[data-item-delete]');
-      deleteBtn.onclick = () => {
-        if (confirm(`Delete "${item.item || item.name}"?`)) {
-          const allItems = loadWishlistFromStorage(pantryId);
-          const filtered = allItems.filter(i => i.id !== item.id);
-          saveWishlistToStorage(pantryId, filtered);
-          renderWishlistItems(grid, toggleBtn, filtered, pantryId, expanded);
-        }
-      };
-
-      grid.appendChild(itemCard);
+      });
+      grid.appendChild(pill);
     });
 
     if (items.length > 10 && toggleBtn) {
@@ -1228,6 +1208,119 @@
     } else if (toggleBtn) {
       toggleBtn.hidden = true;
     }
+    wishlistState.expanded = expanded;
+  }
+
+  async function loadMessages(pantry) {
+    if (!pantry || !pantry.id || !messageState.root) return;
+    const container = messageState.root;
+    container.innerHTML = `<div class="message-empty">Loading messages…</div>`;
+    try {
+      const pantryId = String(pantry.id);
+      const data = await window.PantryAPI.getMessages(pantryId);
+      const items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+      messageState.items = items;
+      messageState.pantryId = pantryId;
+      renderMessages(items);
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      container.innerHTML = `<div class="message-empty">Unable to load messages right now.</div>`;
+    }
+  }
+
+  function renderMessages(items) {
+    const container = messageState.root;
+    if (!container) return;
+    container.innerHTML = '';
+    if (!Array.isArray(items) || items.length === 0) {
+      container.innerHTML = `<div class="message-empty">No messages yet.</div>`;
+      return;
+    }
+
+    items.forEach((msg) => {
+      const userName = (msg && (msg.userName || msg.name)) || 'Community member';
+      const avatarUrl = msg?.userAvatar || msg?.avatarUrl || null;
+      const content = msg?.content || msg?.message || '';
+      const createdAt = msg?.createdAt || msg?.timestamp || msg?.time || '';
+      const photos = Array.isArray(msg?.photos)
+        ? msg.photos
+        : (Array.isArray(msg?.images) ? msg.images : []);
+
+      const card = document.createElement('article');
+      card.className = 'message-card';
+
+      const avatar = document.createElement('div');
+      avatar.className = 'message-avatar';
+      avatar.innerHTML = avatarTag(avatarUrl, 40, userName);
+      card.appendChild(avatar);
+
+      const body = document.createElement('div');
+      body.className = 'message-body';
+
+      const heading = document.createElement('h3');
+      heading.textContent = userName;
+      body.appendChild(heading);
+
+      if (content) {
+        const paragraph = document.createElement('p');
+        paragraph.textContent = content;
+        body.appendChild(paragraph);
+      }
+
+      if (photos && photos.length) {
+        const media = document.createElement('div');
+        media.className = 'message-media';
+        media.innerHTML = photos.slice(0, 3)
+          .map((url) => contentPhotoTag(url, 60, `${userName} upload`))
+          .join('');
+        body.appendChild(media);
+      }
+
+      const timeEl = document.createElement('time');
+      if (createdAt) {
+        timeEl.setAttribute('datetime', createdAt);
+        timeEl.textContent = formatRelativeTimestamp(createdAt);
+      } else {
+        timeEl.textContent = '';
+      }
+      body.appendChild(timeEl);
+
+      card.appendChild(body);
+      container.appendChild(card);
+    });
+
+    attachImageFallbacks(container);
+  }
+
+  function bindMessageModule(root, pantry) {
+    if (!root || !pantry || !pantry.id) return;
+    const list = root.querySelector('[data-message-list]');
+    const addBtn = root.querySelector('[data-message-add]');
+    if (!list || !addBtn) return;
+
+    messageState.root = list;
+    messageState.pantryId = String(pantry.id);
+
+    addBtn.onclick = async () => {
+      const userNameInput = window.prompt('Your name (optional):') || 'Community member';
+      const contentInput = window.prompt('Leave your message:');
+      if (!contentInput || !contentInput.trim()) return;
+      try {
+        await window.PantryAPI.postMessage(
+          String(pantry.id),
+          contentInput.trim(),
+          userNameInput.trim(),
+          null,
+          []
+        );
+        await loadMessages(pantry);
+      } catch (error) {
+        console.error('Error posting message:', error);
+        window.alert('Failed to post message. Please try again.');
+      }
+    };
+
+    loadMessages(pantry);
   }
 
   // Bind message form and success dialog for the details view
@@ -1344,10 +1437,17 @@
     }
   }
 
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+      try {
+        await window.PantryAPI.addWishlist(pantry.id, item, quantity);
+        if (typeof onSuccess === 'function') await onSuccess(); // Re-fetch wishlist immediately after add
+        close();
+      } catch (error) {
+        console.error('Error creating wishlist item:', error);
+        errorEl.textContent = 'Failed to add item. Please try again.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add item';
+      }
+    });
   }
 
   // Filter pantries by status
