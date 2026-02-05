@@ -13,13 +13,21 @@ Quick Start
 3. Open `http://localhost:3000` in your browser.
 4. Click on any green marker to view pantry details with photos and information.
 
+Backend (two options)
+- `functions-backend/` (Azure Functions, **default for local dev**): the frontend is configured to call `http://localhost:7071/api` (see `frontend/api.js`). For end-to-end local instructions, see `run_local.md`.
+- `backend/` (Express, legacy): still used by some container/CI deployment scripts and runs on port `5000`, but it is not the default local dev path.
+
 Files
 - `frontend/index.html`: Root HTML with map container and side panel
 - `frontend/styles.css`: Basic layout and responsive styles
 - `frontend/app.js`: App bootstrap, map init, marker handling, panel updates
 - `frontend/api.js`: Simple API layer with `getPantries()` (reads `frontend/pantries.json`)
-- `frontend/pantries.json`: Real pantry data converted from `frontend/micropantries_all.csv`
-- `frontend/micropantries_all.csv`: Source CSV with 335+ pantry locations
+- `frontend/pantries.json`: Real pantry data converted from `legacy/frontend-data/micropantries_all.csv`
+- `legacy/frontend-data/micropantries_all.csv`: Source CSV with 335+ pantry locations (kept for reference)
+
+Legacy
+- `legacy/app.js`, `legacy/api.js`: Deprecated copies that used to live in the repo root. Use the `frontend/` versions instead.
+- `legacy/frontend-data/mockData.json`: Deprecated demo dataset (not used by the app).
 
 Data Contract (initial)
 - Pantry object (example):
@@ -33,11 +41,11 @@ Data Contract (initial)
   - `contact`: { `owner`: string, `phone`: string }
 
 Swapping to Real Data
-- Replace `getPantries` in `api.js` to call your backend (REST/GraphQL):
+- Update `frontend/api.js` to call your backend (REST/GraphQL):
   - Keep the same return shape for drop-in compatibility
-  - Or adapt in `normalizePantry(p)` inside `api.js`
+  - Or adapt in `normalizePantry(p)` inside `frontend/api.js`
 - For real-time sensors, consider:
-  - Server-Sent Events or WebSocket stream → call `updatePantryMarker(pantry)` and `renderDetails(pantry)` when updates arrive
+  - Server-Sent Events or WebSocket stream → call `window.PantryMap.updatePantryMarker(pantry)` (and optionally refresh the open panel via `window.PantryMap.showPantryDetails(pantry)`) when updates arrive
   - Polling fallback (e.g., every 30–60s) if realtime isn’t ready
 
 Marker Logic
@@ -47,7 +55,7 @@ Marker Logic
 
 Development Notes
 - Keep IDs stable across updates to preserve marker references
-- If you add clustering or heatmap, do so in `app.js` behind a toggle
+- If you add clustering or heatmap, do so in `frontend/app.js` behind a toggle
 - All styles are minimal; feel free to enhance the UI kit later
 
 
