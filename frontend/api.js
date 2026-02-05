@@ -69,8 +69,18 @@
       const err = new Error(`HTTP ${res.status} for ${url}`);
       err.status = res.status;
       try {
-        err.body = await res.text();
-      } catch (_) {}
+        const text = await res.text();
+        try {
+          const errorBody = JSON.parse(text);
+          err.body = errorBody;
+          err.message = errorBody?.error || errorBody?.message || `HTTP ${res.status} for ${url}`;
+        } catch (_) {
+          err.body = text;
+          err.message = text || `HTTP ${res.status} for ${url}`;
+        }
+      } catch (_) {
+        err.message = `HTTP ${res.status} for ${url}`;
+      }
       throw err;
     }
     return res.json();
@@ -137,21 +147,102 @@
   }
 
   function extractPhotos(p = {}) {
+    function normalizeUrlCandidates(raw) {
+      // Return 0..N normalized, browser-loadable URLs for a single raw value.
+      // This lets us "attempt" http→https upgrades without breaking compatibility.
+      if (!isNonEmptyString(raw)) return [];
+
+      let s = raw.trim();
+      if (!s) return [];
+
+      // Remove surrounding quotes defensively (often appears in CSV/JSON exports).
+      if (
+        (s.startsWith('"') && s.endsWith('"') && s.length >= 2) ||
+        (s.startsWith("'") && s.endsWith("'") && s.length >= 2)
+      ) {
+        s = s.slice(1, -1).trim();
+      }
+      if (!s) return [];
+
+      if (/^data:image\//i.test(s)) return [s];
+
+      // Protocol-relative URL (//example.com/img.jpg) → prefer https
+      if (s.startsWith('//')) return [`https:${s}`];
+
+      // Sometimes values are URL-encoded. Decode and re-normalize.
+      if (/%2F/i.test(s) || /%3A/i.test(s)) {
+        try {
+          const decoded = decodeURIComponent(s);
+          if (decoded && decoded !== s) {
+            const normalized = normalizeUrlCandidates(decoded);
+            if (normalized.length) return normalized;
+          }
+        } catch (_) {}
+      }
+
+      if (/^https?:\/\//i.test(s)) {
+        // Frontend is often served over HTTPS; http images can be blocked as mixed content.
+        // We "attempt" an https upgrade but also keep the original http URL to avoid breaking
+        // environments where the host does not support HTTPS (or when the app is served over HTTP).
+        if (/^http:\/\//i.test(s)) {
+          const httpsVersion = `https://${s.slice('http://'.length)}`;
+          return [httpsVersion, s];
+        }
+        return [s];
+      }
+
+      // Common shorthand: "www.example.com/..." → assume https
+      if (/^www\./i.test(s)) return [`https://${s}`];
+
+      return [];
+    }
+
+    const urls = [];
+
+    // Most common: array of strings (or array of objects containing url/src/href).
     if (Array.isArray(p.photos)) {
-      return p.photos
-        .map((url) => trimString(url))
-        .filter((url) => /^https?:\/\//i.test(url));
+      p.photos.forEach((entry) => {
+        const candidate =
+          typeof entry === 'string'
+            ? entry
+            : (entry && (entry.url || entry.src || entry.href)) || '';
+        urls.push(candidate);
+      });
     }
 
-    // Your backend example uses img_link with multiple URLs separated by spaces.
+    // Alternate arrays.
+    if (Array.isArray(p.photoUrls)) urls.push(...p.photoUrls);
+    if (Array.isArray(p.imageUrls)) urls.push(...p.imageUrls);
+    if (Array.isArray(p.urls)) urls.push(...p.urls);
+
+    // Singular fields.
+    urls.push(p.url, p.photoUrl, p.imageUrl, p.image, p.imgUrl, p.imgURL);
+
+    // Backend examples: img_link with multiple URLs separated by spaces (or commas/semicolons).
     if (isNonEmptyString(p.img_link)) {
-      return p.img_link
-        .split(/\s+/)
-        .map((url) => url.trim())
-        .filter((url) => /^https?:\/\//i.test(url));
+      urls.push(...p.img_link.split(/[\s,;]+/));
     }
 
-    return [];
+    // Also accept "img_link" variants.
+    if (isNonEmptyString(p.imgLink)) {
+      urls.push(...p.imgLink.split(/[\s,;]+/));
+    }
+
+    // Normalize + de-dupe.
+    const normalized = urls
+      .flatMap((u) => normalizeUrlCandidates(trimString(u)))
+      .filter(Boolean);
+
+    // De-dupe while preserving order (prefer https-upgraded variants first).
+    const seen = new Set();
+    const out = [];
+    normalized.forEach((u) => {
+      if (!seen.has(u)) {
+        seen.add(u);
+        out.push(u);
+      }
+    });
+    return out;
   }
 
   function derivePantryType(p = {}) {
@@ -397,43 +488,65 @@
     }
   };
 
-  // Donations (graceful until implemented)
-  let donationsWarningLogged = false;
-
-  API.getDonations = async function getDonations(pantryId, page = 1, pageSize = 5) {
+  // Donations
+  API.getDonations = async function getDonations(pantryId, page = 1, pageSize = 1) {
     const { backend: backendId } = resolvePantryId(pantryId);
-    if (!backendId) return [];
+    if (!backendId) return { items: [], page: 1, pageSize: 1, total: 0 };
 
     const url = `${API_BASE_URL}/donations${buildQuery({ pantryId: backendId, page, pageSize })}`;
 
     try {
       const data = await fetchJson(url);
-      return data?.items || [];
+      return {
+        items: Array.isArray(data?.items) ? data.items : [],
+        page: data?.page ?? page,
+        pageSize: data?.pageSize ?? pageSize,
+        total: coerceNumber(data?.total) ?? 0,
+      };
     } catch (e) {
-      const status = e?.status;
-
-      if (status === 404) {
-        if (!donationsWarningLogged) {
-          console.info('[PantryAPI] /donations not yet implemented, returning []');
-          donationsWarningLogged = true;
-        }
-        return [];
-      }
-
       if (isNetworkError(e)) {
-        if (!donationsWarningLogged) {
-          console.info('[PantryAPI] /donations unavailable (network/CORS). Returning [] for now.');
-          donationsWarningLogged = true;
-        }
-        return [];
+        console.warn('[PantryAPI] /donations unavailable (network/CORS).', e);
+      } else {
+        console.error('[PantryAPI] getDonations failed', e);
       }
-
-      if (!donationsWarningLogged) {
-        console.warn('[PantryAPI] /donations errored, returning empty list.', e);
-        donationsWarningLogged = true;
-      }
-      return [];
+      return { items: [], page, pageSize, total: 0 };
     }
+  };
+
+  API.createDonationUploadSas = async function createDonationUploadSas(pantryId, file) {
+    const { backend: backendId } = resolvePantryId(pantryId);
+    if (!backendId) throw new Error('Pantry id is required');
+    if (!file || typeof file.name !== 'string' || typeof file.type !== 'string') {
+      throw new Error('A file with name and type is required');
+    }
+
+    const payload = {
+      pantryId: backendId,
+      filename: file.name,
+      contentType: file.type,
+    };
+
+    const data = await fetchJson(`${API_BASE_URL}/uploads/donations/sas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    return {
+      uploadUrl: data?.uploadUrl,
+      blobUrl: data?.blobUrl,
+      expiresOn: data?.expiresOn,
+    };
+  };
+
+  API.getDonationReadSas = async function getDonationReadSas(blobUrl) {
+    if (!blobUrl || typeof blobUrl !== 'string') throw new Error('blobUrl is required');
+    const url = `${API_BASE_URL}/uploads/donations/read-sas${buildQuery({ blobUrl })}`;
+    const data = await fetchJson(url);
+    return {
+      readUrl: data?.readUrl,
+      expiresOn: data?.expiresOn,
+    };
   };
 
   API.postDonation = async function postDonation(pantryId, payload = {}) {
@@ -441,26 +554,34 @@
     if (!backendId) throw new Error('Pantry id is required');
 
     const note = trimString(payload.note);
+    const donationSize = trimString(payload.donationSize);
+    const donationItems = Array.isArray(payload.donationItems) ? payload.donationItems : [];
     const photoUrls = Array.isArray(payload.photoUrls) ? payload.photoUrls : [];
-    if (!note && photoUrls.length === 0) {
-      throw new Error('At least one of note or photo is required');
+    
+    // Only donationSize is required, all other fields are optional
+    if (!donationSize) {
+      throw new Error('donationSize is required');
     }
 
     const body = {
       pantryId: backendId,
-      note: note || undefined,
-      photoUrls: photoUrls.length ? photoUrls : undefined,
+      donationSize: donationSize,
+      ...(note ? { note } : {}),
+      ...(donationItems.length > 0 ? { donationItems } : {}),
+      ...(photoUrls.length > 0 ? { photoUrls } : {}),
     };
 
     try {
+      console.log('[PantryAPI] Posting donation:', body);
       const data = await fetchJson(`${API_BASE_URL}/donations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      console.log('[PantryAPI] Donation posted successfully:', data);
       return data;
     } catch (e) {
-      console.error('Error posting donor note:', e);
+      console.error('Error posting donation report:', e);
       throw e;
     }
   };

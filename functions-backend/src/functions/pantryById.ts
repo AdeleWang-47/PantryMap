@@ -1,5 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { CosmosClient } from "@azure/cosmos";
+import { corsHeaders, handleOptions } from "../lib/cors";
 
 function getClient() {
   const endpoint = process.env.COSMOS_ENDPOINT;
@@ -13,11 +14,13 @@ export async function getPantryById(
   context: InvocationContext
 ): Promise<HttpResponseInit> {
   try {
+    if (req.method === "OPTIONS") return handleOptions(req);
+    const origin = req.headers.get("origin");
     const id = req.params.id;
     if (!id) {
       return {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
         body: JSON.stringify({ error: "Missing pantry id." })
       };
     }
@@ -34,7 +37,7 @@ export async function getPantryById(
     if (!resource) {
       return {
         status: 404,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
         body: JSON.stringify({ error: "Pantry not found." })
       };
     }
@@ -45,20 +48,43 @@ export async function getPantryById(
       name: resource.name,
       location: resource.location,
       description: resource.description,
+      detail: resource.detail,
       status: resource.status,
-      updatedAt: resource.updatedAt
+      updatedAt: resource.updatedAt,
+
+      // Optional UI fields (present in some datasets)
+      photos: resource.photos,
+      img_link: resource.img_link ?? resource.imgLink,
+      url: resource.url,
+      urls: resource.urls,
+      photoUrl: resource.photoUrl,
+      photoUrls: resource.photoUrls,
+      imageUrl: resource.imageUrl,
+      imageUrls: resource.imageUrls,
+      image: resource.image,
+      imgUrl: resource.imgUrl ?? resource.imgURL,
+
+      address: resource.address ?? resource.adress,
+      city: resource.city ?? resource.town,
+      state: resource.state ?? resource.region,
+      zip: resource.zip ?? resource.zipcode ?? resource.postalCode,
+
+      refrigerated: resource.refrigerated,
+      pantryType: resource.pantryType,
+      type: resource.type,
     };
 
     return {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
       body: JSON.stringify(cleaned)
     };
   } catch (err: any) {
+    const origin = req.headers.get("origin");
     context.log("getPantryById error:", err?.message || err);
     return {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
       body: JSON.stringify({ error: "Failed to fetch pantry.", detail: err?.message || String(err) })
     };
   }
@@ -66,7 +92,7 @@ export async function getPantryById(
 
 app.http("pantryById", {
   route: "pantries/{id}",
-  methods: ["GET"],
+  methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: getPantryById
 });

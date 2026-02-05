@@ -18,10 +18,13 @@
     root: null
   };
   let donorNotesState = {
-    latest: null,
+    items: [],
+    expanded: false,
     pantryId: null,
     root: null
   };
+  /** In-memory cache: blobUrl -> readUrl for donation images (avoids repeated read-sas calls) */
+  const donationReadUrlCache = {};
   let wishlistModal = null;
   const listControlsState = {
     type: 'all', // all | fridge | shelf
@@ -36,24 +39,35 @@
     photo: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120" viewBox="0 0 160 120"><rect width="160" height="120" rx="10" fill="%23f1f5f9"/><path d="M20 92l28-32 18 20 22-26 32 38H20z" fill="%2394a3b8"/><circle cx="52" cy="40" r="10" fill="%2394a3b8"/></svg>'
   };
 
+  function escapeAttr(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function pantryPhotoTag(url, alt, extraAttrs = '') {
     const src = url && typeof url === 'string' ? url : PLACEHOLDERS.pantry;
-    const safeAlt = alt ? alt.replace(/"/g, '&quot;') : 'Pantry photo';
-    return `<img data-role='pantry-photo' src='${src}' alt='${safeAlt}' ${extraAttrs}>`;
+    const safeAlt = escapeAttr(alt || 'Pantry photo');
+    const rawAttr = url && typeof url === 'string' ? `data-raw-src='${escapeAttr(url)}'` : '';
+    return `<img data-role='pantry-photo' ${rawAttr} src='${escapeAttr(src)}' alt='${safeAlt}' ${extraAttrs}>`;
   }
 
   function avatarTag(url, size = 40, alt = 'User avatar') {
     const src = url && typeof url === 'string' ? url : PLACEHOLDERS.avatar;
     const style = `width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover;`;
-    const safeAlt = alt.replace(/"/g, '&quot;');
-    return `<img data-role='avatar' src='${src}' alt='${safeAlt}' style='${style}'>`;
+    const safeAlt = escapeAttr(alt);
+    return `<img data-role='avatar' src='${escapeAttr(src)}' alt='${safeAlt}' style='${escapeAttr(style)}'>`;
   }
 
   function contentPhotoTag(url, size = 60, alt = '') {
     const src = url && typeof url === 'string' ? url : PLACEHOLDERS.photo;
     const style = `width: ${size}px; height: ${size}px; border-radius: 8px; object-fit: cover;`;
-    const safeAlt = (alt || 'Photo').replace(/"/g, '&quot;');
-    return `<img data-role='content-photo' src='${src}' alt='${safeAlt}' style='${style}'>`;
+    const safeAlt = escapeAttr(alt || 'Photo');
+    const rawAttr = url && typeof url === 'string' ? `data-raw-src='${escapeAttr(url)}'` : '';
+    return `<img data-role='content-photo' ${rawAttr} src='${escapeAttr(src)}' alt='${safeAlt}' style='${escapeAttr(style)}'>`;
   }
 
   function renderStockGauge(currentItems = 0, capacity = 40) {
@@ -131,7 +145,20 @@
       const fallback = role === 'avatar' ? PLACEHOLDERS.avatar : (role === 'pantry-photo' ? PLACEHOLDERS.pantry : PLACEHOLDERS.photo);
       const ensure = () => { if (!img.getAttribute('src')) img.setAttribute('src', fallback); };
       ensure();
-      img.addEventListener('error', () => { img.setAttribute('src', fallback); });
+      img.addEventListener('error', async () => {
+        const attempted = img.getAttribute('data-sas-attempted') === '1';
+        const rawSrc = (img.getAttribute('data-raw-src') || '').trim();
+        // If backend stores private Azure Blob URLs (no SAS), resolve a temporary read URL on-demand.
+        if (!attempted && rawSrc && rawSrc.includes('.blob.core.windows.net') && !rawSrc.includes('?')) {
+          img.setAttribute('data-sas-attempted', '1');
+          const readUrl = await resolveDonationImageReadUrl(rawSrc);
+          if (readUrl) {
+            img.setAttribute('src', readUrl);
+            return;
+          }
+        }
+        img.setAttribute('src', fallback);
+      });
     });
   }
 
@@ -295,7 +322,6 @@
   function renderListItem(p) {
     const title = p.name || 'Untitled Pantry';
     const addrLine = (p.address || '').trim();
-    const distance = '1 mi';
     const photo = (p.photos && p.photos[0]) || null;
     const total = getTotalStock(p);
     const stock = getStockBadge(total);
@@ -306,7 +332,6 @@
         <div class="list-main">
           <div class="list-row">
             <div class="list-title">${title}</div>
-            <div class="list-distance">${distance}</div>
           </div>
           <div class="list-address">${addrLine}</div>
           <div class="list-meta">
@@ -422,59 +447,20 @@
     const photoUrl = photosArr.length > 0 ? photosArr[0] : '';
     const secondPhotoUrl = photosArr[1] || photosArr[0] || '';
     const totalItems = pantry.inventory?.categories?.reduce((sum, cat) => sum + (cat.quantity || 0), 0) || 0;
-    const contactName = pantry.contact?.owner || 'Jane';
-    const contactEmail = pantry.contact?.email || pantry.contact?.emailAddress || 'abcd@gmail.com';
-    const distanceText = pantry.distance || '1 mi';
-    const addressText = pantry.address || '123 1st St, Bellevue, 98005';
-    const description = pantry.description || pantry.summary || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
+    const addressText = pantry.address || 'detail address unknown';
     const pantryTypeLabel = pantry.pantryType
       ? pantry.pantryType.charAt(0).toUpperCase() + pantry.pantryType.slice(1)
       : 'Pantry';
-    const contactLine = contactEmail
-      ? `${contactName} (<a href="mailto:${contactEmail}">${contactEmail}</a>)`
-      : contactName;
-    const sensors = pantry.sensors || {};
-    const telemetryMarkup = `
-      <section class="detail-section detail-card-section telemetry-section">
-        <div class="detail-card-head">
-          <h2>Sensor data</h2>
-        </div>
-        <div class="telemetry-grid">
-          <div class="telemetry-card">
-            <span class="telemetry-label">Weight</span>
-            <span class="telemetry-value">${formatWeightDisplay(sensors.weightKg)}</span>
-          </div>
-          <div class="telemetry-card">
-            <span class="telemetry-label">Last activity</span>
-            <span class="telemetry-value">${formatDoorEvent(sensors.lastDoorEvent)}</span>
-          </div>
-          <div class="telemetry-card">
-            <span class="telemetry-label">Updated</span>
-            <span class="telemetry-value">${sensors.updatedAt ? formatDateTimeMinutes(sensors.updatedAt) : '--'}</span>
-          </div>
-          <div class="telemetry-card">
-            <span class="telemetry-label">Condition</span>
-            <span class="telemetry-pill">${formatCondition(sensors.foodCondition)}</span>
-          </div>
-        </div>
-      </section>
-    `;
 
     return `
       <div class="detail-hero">
         <div class="detail-hero-cover">
           ${pantryPhotoTag(photoUrl, pantry.name || 'Pantry photo', 'class="detail-hero-img"')}
           <span class="detail-hero-badge">${pantryTypeLabel}</span>
-          <button class="detail-floating-btn detail-upload" type="button" aria-label="Upload donation photo">⇪</button>
         </div>
         <div class="detail-hero-body">
           <h1 class="detail-title">${pantry.name || 'Untitled Pantry'}</h1>
-          <div class="detail-subline">${distanceText} · ${addressText}</div>
-          <p class="detail-description">${description}</p>
-          <div class="detail-contact">
-            <span class="detail-contact-icon">👤</span>
-            <div class="detail-contact-info"><span>${contactLine}</span></div>
-          </div>
+          <div class="detail-subline">${addressText}</div>
         </div>
       </div>
 
@@ -487,14 +473,13 @@
         </div>
       </section>
 
-      ${telemetryMarkup}
-
       <section class="detail-section donor-notes-section">
-        <h2>Donor Notes</h2>
-        <button class="donor-notes-cta" type="button" data-donor-note-add>Add new donor note</button>
+        <h2>Post a Donation</h2>
+        <button class="donor-notes-cta" type="button" data-donor-note-add>report your new donation</button>
         <div class="donor-notes-latest" data-donor-notes-latest>
           <div class="donor-note-empty">Loading…</div>
         </div>
+        <button class="donor-notes-toggle section-link" type="button" data-donor-notes-toggle hidden>View more</button>
       </section>
 
       <section class="detail-section detail-card-section wishlist-section" data-wishlist>
@@ -524,15 +509,20 @@
     const closeBtn = document.getElementById('closeDetails');
     closeBtn.addEventListener('click', () => {
       const detailsPanel = document.getElementById('details');
-      // Toggle collapsed state instead of hide
+      // If a pantry is selected, always go back to the list view (P2)
+      if (currentPantry) {
+        currentPantry = null;
+        detailsPanel.classList.remove('collapsed');
+        showListForCurrentView();
+        updateCollapseButton(false);
+        return;
+      }
+
+      // Otherwise (already in list view), toggle collapsed state
       const willCollapse = !detailsPanel.classList.contains('collapsed');
       detailsPanel.classList.toggle('collapsed', willCollapse);
-      if (willCollapse) {
-        // Keep list hidden when collapsing from details; user can expand again
-        currentPantry = null;
-      } else {
-        // Expanded back; if no pantry selected, show list
-        if (!currentPantry) showListForCurrentView();
+      if (!willCollapse) {
+        showListForCurrentView();
       }
       updateCollapseButton(detailsPanel.classList.contains('collapsed'));
     });
@@ -595,48 +585,131 @@
     btn.setAttribute('aria-label', isCollapsed ? 'Expand details' : 'Back to list');
   }
 
-  async function loadLatestDonorNote(pantry) {
+  async function resolveDonationImageReadUrl(blobUrl) {
+    if (!blobUrl) return null;
+    if (donationReadUrlCache[blobUrl]) return donationReadUrlCache[blobUrl];
+    try {
+      const data = await window.PantryAPI.getDonationReadSas(blobUrl);
+      const readUrl = data?.readUrl || null;
+      if (readUrl) donationReadUrlCache[blobUrl] = readUrl;
+      return readUrl;
+    } catch (e) {
+      console.warn('Failed to get read URL for donation image', blobUrl, e);
+      return null;
+    }
+  }
+
+  async function loadDonorNotes(pantry) {
     if (!pantry || !pantry.id || !donorNotesState.root) return;
     const container = donorNotesState.root;
     container.innerHTML = '<div class="donor-note-empty">Loading…</div>';
     try {
-      const items = await window.PantryAPI.getDonations(pantry.id, 1, 1);
-      const latest = Array.isArray(items) && items.length > 0 ? items[0] : null;
-      donorNotesState.latest = latest;
+      // Fetch all donations (we'll filter by 24h on backend)
+      const data = await window.PantryAPI.getDonations(pantry.id, 1, 100);
+      const allItems = data?.items || [];
+      
+      // Filter items within 24 hours
+      const now = Date.now();
+      const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+      const recentItems = allItems.filter(item => {
+        const createdAt = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+        return createdAt >= twentyFourHoursAgo;
+      });
+      
+      donorNotesState.items = recentItems;
       donorNotesState.pantryId = String(pantry.id);
-      renderLatestDonorNote(container, latest);
+      donorNotesState.expanded = false;
+      
+      renderDonorNotes();
     } catch (error) {
-      console.error('Error loading latest donor note:', error);
+      console.error('Error loading donor notes:', error);
       container.innerHTML = '<div class="donor-note-empty">Unable to load.</div>';
     }
   }
 
-  function renderLatestDonorNote(container, note) {
+  async function renderDonorNotes() {
+    const container = donorNotesState.root;
     if (!container) return;
-    if (!note || (!(note.note && note.note.trim()) && !((note.photoUrls || note.photos || note.images || []).length))) {
-      container.innerHTML = '<div class="donor-note-empty">No donor notes yet.</div>';
+    
+    // Find toggle button in the parent section
+    const section = container.closest('.donor-notes-section');
+    const toggleBtn = section ? section.querySelector('[data-donor-notes-toggle]') : null;
+    
+    const items = donorNotesState.items || [];
+    container.innerHTML = '';
+    
+    if (!Array.isArray(items) || items.length === 0) {
+      container.innerHTML = '<div class="donor-note-empty">No donor reports yet.</div>';
+      if (toggleBtn) toggleBtn.hidden = true;
       return;
     }
-    const text = (note.note || note.content || note.message || '').trim();
-    const photos = note.photoUrls || note.photos || note.images || [];
-    const photoUrl = Array.isArray(photos) ? photos[0] : (photos || null);
-    const createdAt = note.createdAt || note.updatedAt || note.time || note.timestamp || '';
-    const card = document.createElement('article');
-    card.className = 'donor-note-card';
-    let inner = '';
-    if (photoUrl) {
-      inner += `<div class="donor-note-media">${contentPhotoTag(photoUrl, 160, 'Donor note photo')}</div>`;
+
+    const expanded = donorNotesState.expanded === true;
+    const flatCount = 3;
+    const toShow = expanded ? items : items.slice(0, flatCount);
+    const hasMore = items.length > flatCount;
+
+    // Resolve all photo URLs for items to show
+    for (const note of toShow) {
+      const photoUrls = Array.isArray(note.photoUrls) ? note.photoUrls : [];
+      const resolvedUrls = await Promise.all(photoUrls.map((url) => resolveDonationImageReadUrl(url)));
+      
+      const card = document.createElement('article');
+      card.className = 'donor-note-card';
+      
+      let inner = '';
+      if (resolvedUrls.length) {
+        inner += '<div class="donor-note-media">';
+        resolvedUrls.forEach((readUrl) => {
+          if (readUrl) inner += contentPhotoTag(readUrl, 160, 'Donor report photo');
+        });
+        inner += '</div>';
+      }
+      
+      // Display donation size with human-readable labels
+      const donationSize = note.donationSize || '';
+      if (donationSize) {
+        const sizeLabels = {
+          'low_donation': 'ONE OR FEW ITEMS',
+          'medium_donation': 'ABOUT 1 GROCERY BAG',
+          'high_donation': 'MORE THAN 1 GROCERY BAG'
+        };
+        const sizeLabel = sizeLabels[donationSize] || donationSize;
+        inner += `<p class="donor-note-text"><strong>Amount:</strong> ${sizeLabel.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+      }
+      
+      // Display donation items
+      const donationItems = Array.isArray(note.donationItems) ? note.donationItems : [];
+      if (donationItems.length > 0) {
+        const itemsText = donationItems.join(', ');
+        inner += `<p class="donor-note-text"><strong>Items:</strong> ${itemsText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+      }
+      
+      // Display message if present
+      const noteText = note.note || '';
+      if (noteText) {
+        inner += `<p class="donor-note-text">${noteText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+      }
+      
+      const createdAt = note.createdAt || note.updatedAt || note.time || note.timestamp || '';
+      if (createdAt) {
+        inner += `<time class="donor-note-time" datetime="${createdAt}">${formatRelativeTimestamp(createdAt)}</time>`;
+      }
+      
+      card.innerHTML = inner;
+      container.appendChild(card);
     }
-    if (text) {
-      inner += `<p class="donor-note-text">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
-    }
-    if (createdAt) {
-      inner += `<time class="donor-note-time" datetime="${createdAt}">${formatRelativeTimestamp(createdAt)}</time>`;
-    }
-    card.innerHTML = inner;
-    container.innerHTML = '';
-    container.appendChild(card);
+
     attachImageFallbacks(container);
+
+    if (toggleBtn) {
+      if (hasMore) {
+        toggleBtn.hidden = false;
+        toggleBtn.textContent = expanded ? 'Collapse' : `View more (${items.length - flatCount} more)`;
+      } else {
+        toggleBtn.hidden = true;
+      }
+    }
   }
 
   function openDonorNoteModal(pantry, onSuccess) {
@@ -645,21 +718,42 @@
     overlay.innerHTML = `
       <div class="donor-note-modal" role="dialog" aria-modal="true" aria-labelledby="donor-note-modal-title">
         <button type="button" class="donor-note-modal-close" aria-label="Close">×</button>
-        <h3 id="donor-note-modal-title">Add donor note</h3>
-        <p class="donor-note-modal-hint">Add a photo and/or text (at least one required).</p>
+        <h3 id="donor-note-modal-title">Report your donation</h3>
+        <p class="donor-note-modal-hint">Please select how much you are donating. All other fields are optional.</p>
         <form class="donor-note-form">
+          <label>
+            <span>How much are you donating?</span>
+            <select name="donationSize" required>
+              <option value="">Select size...</option>
+              <option value="low_donation">ONE OR FEW ITEMS</option>
+              <option value="medium_donation">ABOUT 1 GROCERY BAG</option>
+              <option value="high_donation">MORE THAN 1 GROCERY BAG</option>
+            </select>
+          </label>
+          <label>
+            <span>What are you donating?</span>
+            <select name="itemType">
+              <option value="">Select type (optional)...</option>
+              <option value="fresh produce">Fresh produce</option>
+              <option value="cans">Cans</option>
+              <option value="beans">Beans</option>
+              <option value="liquids">Liquids</option>
+              <option value="other">Other</option>
+            </select>
+            <input type="text" name="itemKeywords" class="donor-note-keywords-input" placeholder="Or add keywords (e.g., rice, pasta, vegetables)" />
+          </label>
           <label class="donor-note-photo-label">
-            <span>Photo (optional)</span>
+            <span>Post a photo!</span>
             <input type="file" name="photo" accept="image/*" />
           </label>
           <label>
-            <span>Note (optional)</span>
-            <textarea name="note" rows="3" placeholder="e.g. Dropped off canned goods"></textarea>
+            <span>Leave a message (optional)</span>
+            <textarea name="message" rows="3" placeholder="Add any additional details about your donation..."></textarea>
           </label>
           <div class="donor-note-modal-error" aria-live="polite"></div>
           <div class="donor-note-modal-actions">
             <button type="button" class="donor-note-modal-cancel">Cancel</button>
-            <button type="submit" class="donor-note-modal-submit">Add donor note</button>
+            <button type="submit" class="donor-note-modal-submit">Submit report</button>
           </div>
         </form>
       </div>
@@ -688,35 +782,96 @@
     const submitBtn = overlay.querySelector('.donor-note-modal-submit');
     const errorEl = overlay.querySelector('.donor-note-modal-error');
     const photoInput = form.querySelector('input[name="photo"]');
-    const noteInput = form.querySelector('textarea[name="note"]');
+    const donationSizeInput = form.querySelector('select[name="donationSize"]');
+    const itemTypeInput = form.querySelector('select[name="itemType"]');
+    const itemKeywordsInput = form.querySelector('input[name="itemKeywords"]');
+    const messageInput = form.querySelector('textarea[name="message"]');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorEl.textContent = '';
-      const note = (noteInput && noteInput.value) ? String(noteInput.value).trim() : '';
+      const donationSize = (donationSizeInput && donationSizeInput.value) ? String(donationSizeInput.value).trim() : '';
+      const itemType = (itemTypeInput && itemTypeInput.value) ? String(itemTypeInput.value).trim() : '';
+      const itemKeywords = (itemKeywordsInput && itemKeywordsInput.value) ? String(itemKeywordsInput.value).trim() : '';
+      const message = (messageInput && messageInput.value) ? String(messageInput.value).trim() : '';
       const file = photoInput && photoInput.files && photoInput.files[0];
-      if (!note && !file) {
-        errorEl.textContent = 'Please add a photo and/or text.';
+      
+      if (!donationSize) {
+        errorEl.textContent = 'Please select how much you are donating.';
         return;
       }
 
+      // Combine item type and keywords
+      const donationItems = [];
+      if (itemType) donationItems.push(itemType);
+      if (itemKeywords) {
+        // Split keywords by comma or space and add them
+        const keywords = itemKeywords.split(/[,\s]+/).filter(k => k.trim().length > 0);
+        donationItems.push(...keywords);
+      }
+
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Adding…';
+      submitBtn.textContent = 'Submitting…';
 
       try {
         let photoUrls = [];
         if (file) {
-          const dataUrl = await readFileAsDataUrl(file);
-          if (dataUrl) photoUrls = [dataUrl];
+          const sas = await window.PantryAPI.createDonationUploadSas(pantry.id, file);
+          const uploadUrl = sas?.uploadUrl;
+          const blobUrl = sas?.blobUrl;
+          if (!uploadUrl || !blobUrl) {
+            throw new Error('Could not get upload link.');
+          }
+          const putRes = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: {
+              'x-ms-blob-type': 'BlockBlob',
+              'Content-Type': file.type
+            },
+            body: file
+          });
+          if (!putRes.ok) {
+            throw new Error('Upload failed. Please try again.');
+          }
+          photoUrls = [blobUrl];
         }
-        await window.PantryAPI.postDonation(pantry.id, { note: note || undefined, photoUrls });
+        const payload = { 
+          donationSize, 
+          donationItems: donationItems.length > 0 ? donationItems : undefined,
+          note: message || undefined,
+          photoUrls 
+        };
+        console.log('Submitting donation report:', payload);
+        await window.PantryAPI.postDonation(pantry.id, payload);
+        if (donationSizeInput) donationSizeInput.value = '';
+        if (itemTypeInput) itemTypeInput.value = '';
+        if (itemKeywordsInput) itemKeywordsInput.value = '';
+        if (messageInput) messageInput.value = '';
+        if (photoInput) photoInput.value = '';
         if (typeof onSuccess === 'function') await onSuccess();
         close();
       } catch (error) {
-        console.error('Error adding donor note:', error);
-        errorEl.textContent = 'Failed to add. Please try again.';
+        console.error('Error submitting donation report:', error);
+        let errorMessage = 'Failed to submit. Please try again.';
+        if (error && error.body) {
+          if (typeof error.body === 'string') {
+            try {
+              const parsed = JSON.parse(error.body);
+              errorMessage = parsed.error || parsed.message || errorMessage;
+            } catch (_) {
+              errorMessage = error.body;
+            }
+          } else if (error.body.error) {
+            errorMessage = error.body.error;
+          } else if (error.body.message) {
+            errorMessage = error.body.message;
+          }
+        } else if (error && error.message) {
+          errorMessage = error.message;
+        }
+        errorEl.textContent = errorMessage;
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Add donor note';
+        submitBtn.textContent = 'Submit report';
       }
     });
   }
@@ -734,13 +889,22 @@
     if (!root || !pantry || !pantry.id) return;
     const latestEl = root.querySelector('[data-donor-notes-latest]');
     const addBtn = root.querySelector('[data-donor-note-add]');
+    const toggleBtn = root.querySelector('[data-donor-notes-toggle]');
     if (!latestEl || !addBtn) return;
 
     donorNotesState.root = latestEl;
     donorNotesState.pantryId = String(pantry.id);
 
-    addBtn.onclick = () => openDonorNoteModal(pantry, () => loadLatestDonorNote(pantry));
-    loadLatestDonorNote(pantry);
+    addBtn.onclick = () => openDonorNoteModal(pantry, () => loadDonorNotes(pantry));
+    
+    if (toggleBtn) {
+      toggleBtn.onclick = () => {
+        donorNotesState.expanded = !donorNotesState.expanded;
+        renderDonorNotes();
+      };
+    }
+    
+    loadDonorNotes(pantry);
   }
 
   function bindWishlistModule(root, pantry) {

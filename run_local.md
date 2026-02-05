@@ -120,7 +120,11 @@ npx serve -l 5500 frontend
 # 后端
 cd functions-backend
 npm install
-func start --port 7071
+# ⚠️ functions-backend 是 TypeScript 项目，func start 运行的是 dist/ 里的编译产物
+# 推荐用 npm start（会自动 clean + build），或者先手动 build 再 func start
+npm start -- --port 7071
+# 或者：
+# npm run build && func start --port 7071
 
 # 后端自检
 curl -i http://localhost:7071/api/health
