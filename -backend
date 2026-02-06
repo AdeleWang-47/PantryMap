@@ -1,0 +1,6 @@
+[33mcommit 54abceb0058f26258010b0fbdca18bc91691c9e4[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mtry/merge-cleanup[m[33m)[m
+Merge: 9137e79 0a49ce9
+Author: fiona0913 <jingx23@uw.edu>
+Date:   Thu Feb 5 01:40:47 2026 -0800
+
+    Merge remote-tracking branch 'origin/chore/restructure-frontend-cleanup' into try/merge-cleanup
