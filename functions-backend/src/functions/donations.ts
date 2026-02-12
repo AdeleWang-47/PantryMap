@@ -1,4 +1,5 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
+import { CosmosClient } from "@azure/cosmos";
 import { corsHeaders, handleOptions } from "../lib/cors";
 
 function json(status: number, body: unknown, origin?: string | null): HttpResponseInit {
@@ -16,7 +17,16 @@ function parsePositiveInt(value: string | null, fallback: number): number {
   return parsed;
 }
 
-// 🔹 in-memory donor notes (per pantry)
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing ${name}`);
+  return v;
+}
+
+function makeId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
 type DonorNote = {
   id: string;
   pantryId: string;
@@ -27,9 +37,17 @@ type DonorNote = {
   createdAt: string;
 };
 
-const donorNotesByPantry = new Map<string, DonorNote[]>();
+function getDonationsContainer() {
+  const endpoint = requireEnv("COSMOS_ENDPOINT");
+  const key = requireEnv("COSMOS_KEY");
+  const dbId = process.env.COSMOS_DATABASE || "microPantry";
+  const containerId = process.env.COSMOS_CONTAINER_DONATIONS || "donations";
 
-async function getDonations(req: HttpRequest): Promise<HttpResponseInit> {
+  const client = new CosmosClient({ endpoint, key });
+  return client.database(dbId).container(containerId);
+}
+
+async function getDonations(req: HttpRequest, ctx: InvocationContext): Promise<HttpResponseInit> {
   const origin = req.headers.get("origin");
   const pantryId = req.query.get("pantryId")?.trim() ?? "";
   const page = parsePositiveInt(req.query.get("page"), 1);
@@ -39,18 +57,29 @@ async function getDonations(req: HttpRequest): Promise<HttpResponseInit> {
     return json(400, { error: "Missing pantryId." }, origin);
   }
 
-  let list = donorNotesByPantry.get(pantryId) ?? [];
+  const container = getDonationsContainer();
   
-  // Filter out posts older than 24 hours
-  const now = Date.now();
-  const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
-  list = list.filter(item => {
-    const createdAt = item.createdAt ? new Date(item.createdAt).getTime() : 0;
-    return createdAt >= twentyFourHoursAgo;
-  });
+  // Calculate timestamp for 24 hours ago
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   
-  // Update the stored list (remove old items)
-  donorNotesByPantry.set(pantryId, list);
+  ctx.log(`🔍 Querying donations for pantryId: ${pantryId}, after: ${twentyFourHoursAgo}`);
+  
+  // Query donations for this pantry created within the last 24 hours
+  const querySpec = {
+    query: `SELECT * FROM c 
+            WHERE c.pantryId = @pantryId 
+            AND c.createdAt >= @twentyFourHoursAgo 
+            ORDER BY c.createdAt DESC`,
+    parameters: [
+      { name: "@pantryId", value: pantryId },
+      { name: "@twentyFourHoursAgo", value: twentyFourHoursAgo }
+    ],
+  };
+
+  const { resources } = await container.items.query(querySpec).fetchAll();
+  const list = resources || [];
+  
+  ctx.log(`📊 Found ${list.length} donations for pantryId: ${pantryId}`);
   
   const total = list.length;
   const start = (page - 1) * pageSize;
@@ -59,7 +88,7 @@ async function getDonations(req: HttpRequest): Promise<HttpResponseInit> {
   return json(200, { items, page, pageSize, total }, origin);
 }
 
-async function postDonation(req: HttpRequest): Promise<HttpResponseInit> {
+async function postDonation(req: HttpRequest, ctx: InvocationContext): Promise<HttpResponseInit> {
   const origin = req.headers.get("origin");
 
   let body: { pantryId?: string; note?: string; donationSize?: string; donationItems?: string[]; photoUrls?: string[] };
@@ -90,8 +119,10 @@ async function postDonation(req: HttpRequest): Promise<HttpResponseInit> {
     return json(400, { error: "donationSize is required." }, origin);
   }
 
+  const container = getDonationsContainer();
+
   const item: DonorNote = {
-    id: `dn-${pantryId}-${Date.now()}`,
+    id: makeId("donation"),
     pantryId,
     ...(note ? { note } : {}),
     ...(donationSize ? { donationSize } : {}),
@@ -100,21 +131,34 @@ async function postDonation(req: HttpRequest): Promise<HttpResponseInit> {
     createdAt: new Date().toISOString(),
   };
 
-  const list = donorNotesByPantry.get(pantryId) ?? [];
-  list.unshift(item);
-  donorNotesByPantry.set(pantryId, list);
+  ctx.log("💾 Attempting to create donation in Cosmos DB:", JSON.stringify(item));
+  
+  try {
+    const response = await container.items.create(item);
+    ctx.log("✅ Donation created successfully:", response.resource?.id);
+  } catch (error: any) {
+    ctx.error("❌ Failed to create donation in Cosmos DB:", error?.message || error);
+    throw error;
+  }
 
   return json(201, item, origin);
-}
-
-async function handler(req: HttpRequest): Promise<HttpResponseInit> {
-  if (req.method === "OPTIONS") return handleOptions(req);
-  if (req.method === "POST") return postDonation(req);
-  return getDonations(req);
 }
 
 app.http("donations", {
   methods: ["GET", "POST", "OPTIONS"],
   authLevel: "anonymous",
-  handler,
+  handler: async (req: HttpRequest, ctx: InvocationContext): Promise<HttpResponseInit> => {
+    if (req.method === "OPTIONS") {
+      return handleOptions(req);
+    }
+    const origin = req.headers.get("origin");
+    try {
+      if (req.method === "POST") return await postDonation(req, ctx);
+      return await getDonations(req, ctx);
+    } catch (e: any) {
+      ctx.error("❌ Donations handler error:", e?.message || e);
+      ctx.error("Error stack:", e?.stack);
+      return json(500, { error: "Donations function error.", detail: e?.message || String(e) }, origin);
+    }
+  },
 });
