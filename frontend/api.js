@@ -633,28 +633,17 @@
   API.getTelemetryLatest = async function getTelemetryLatest(pantryId) {
     const { backend: backendId } = resolvePantryId(pantryId);
     if (!backendId) return null;
-
-    const url = `${API_BASE_URL}/telemetry${buildQuery({ pantryId: backendId, latest: true })}`;
+  
+    // ✅ new proxy endpoint
+    const url = `/api/telemetry/latest${buildQuery({ pantryId: backendId })}`;
+  
     try {
       const data = await fetchJson(url);
-      return data?.latest || null;
+      // ✅ new shape: telemetry object directly
+      return data || null;
     } catch (e) {
       console.error('Error fetching telemetry latest:', e);
       return null;
-    }
-  };
-
-  API.getTelemetryHistory = async function getTelemetryHistory(pantryId, from, to) {
-    const { backend: backendId } = resolvePantryId(pantryId);
-    if (!backendId) return [];
-
-    const url = `${API_BASE_URL}/telemetry${buildQuery({ pantryId: backendId, from, to })}`;
-    try {
-      const data = await fetchJson(url);
-      return data?.items || [];
-    } catch (e) {
-      console.error('Error fetching telemetry history:', e);
-      return [];
     }
   };
 

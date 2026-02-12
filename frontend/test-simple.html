@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Simple SVG Color Test</title>
+  <style>
+    body { padding: 40px; font-family: sans-serif; }
+    svg { display: block; margin: 20px 0; }
+    .test-path-red { 
+      fill: none;
+      stroke: #ef4444;
+      stroke-width: 16;
+      stroke-linecap: round;
+    }
+    .test-path-yellow { 
+      fill: none;
+      stroke: #f59e0b;
+      stroke-width: 16;
+      stroke-linecap: round;
+    }
+    .test-path-green { 
+      fill: none;
+      stroke: #52b788;
+      stroke-width: 16;
+      stroke-linecap: round;
+    }
+  </style>
+</head>
+<body>
+  <h1>Simple SVG Path Color Test</h1>
+  
+  <h2>Test 1: Full red arc (no dash)</h2>
+  <svg viewBox="0 0 200 120" width="200" height="120">
+    <path class="test-path-red" d="M20 100 A80 80 0 0 1 180 100" />
+  </svg>
+  
+  <h2>Test 2: Full yellow arc (no dash)</h2>
+  <svg viewBox="0 0 200 120" width="200" height="120">
+    <path class="test-path-yellow" d="M20 100 A80 80 0 0 1 180 100" />
+  </svg>
+  
+  <h2>Test 3: Full green arc (no dash)</h2>
+  <svg viewBox="0 0 200 120" width="200" height="120">
+    <path class="test-path-green" d="M20 100 A80 80 0 0 1 180 100" />
+  </svg>
+  
+  <h2>Test 4: Red arc with 50% dash</h2>
+  <svg viewBox="0 0 200 120" width="200" height="120">
+    <path class="test-path-red" d="M20 100 A80 80 0 0 1 180 100" 
+          style="stroke-dasharray: 251.327; stroke-dashoffset: 125.66;" />
+  </svg>
+  
+  <h2>Test 5: Yellow arc with 50% dash (with transform)</h2>
+  <svg viewBox="0 0 200 120" width="200" height="120">
+    <path class="test-path-yellow" d="M20 100 A80 80 0 0 1 180 100" 
+          style="stroke-dasharray: 251.327; stroke-dashoffset: 125.66; transform-origin: 50% 100%; transform: rotate(-180deg);" />
+  </svg>
+
+  <script>
+    console.log('Simple test loaded');
+  </script>
+</body>
+</html>

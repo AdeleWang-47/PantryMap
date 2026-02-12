@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Debug Stock Gauge</title>
+  <style>
+    :root {
+      --accent: #52b788;
+      --text-secondary: #64748b;
+      --panel: #ffffff;
+    }
+    body { 
+      font-family: system-ui, sans-serif; 
+      padding: 40px;
+      background: #f8fafc;
+    }
+    .detail-gauge {
+      position: relative;
+      width: 200px;
+      max-width: 100%;
+      margin: 20px auto;
+    }
+    .detail-gauge-svg {
+      width: 100%;
+      height: auto;
+    }
+    .detail-gauge-track {
+      fill: none;
+      stroke: rgba(148, 163, 184, 0.22);
+      stroke-width: 16;
+      stroke-linecap: round;
+    }
+    .detail-gauge-fill {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 16;
+      stroke-linecap: round;
+      transform-origin: 50% 100%;
+      transform: rotate(-180deg);
+      transition: stroke-dashoffset 0.4s ease;
+    }
+    .detail-gauge-fill-low {
+      stroke: #ef4444 !important; /* Red for low stock */
+    }
+    .detail-gauge-fill-medium {
+      stroke: #f59e0b !important; /* Yellow/orange for medium stock */
+    }
+    .detail-gauge-fill-high {
+      stroke: #52b788 !important; /* Green for high stock */
+    }
+    .detail-gauge-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 20px;
+    }
+    .detail-gauge-status {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .detail-gauge-count {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .test-section {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    h2 { margin-top: 0; }
+  </style>
+</head>
+<body>
+  <h1>Stock Gauge Color Test</h1>
+  
+  <div class="test-section">
+    <h2>Low (Red) - 20% filled</h2>
+    <div class="detail-gauge" data-level="low">
+      <svg viewBox="0 0 200 120" class="detail-gauge-svg" role="img" aria-label="Stock level">
+        <path class="detail-gauge-track" d="M20 100 A80 80 0 0 1 180 100" />
+        <path class="detail-gauge-fill detail-gauge-fill-low" d="M20 100 A80 80 0 0 1 180 100"
+          style="stroke-dasharray: 251.32741228718345; stroke-dashoffset: 201.06192982974676;" />
+      </svg>
+      <div class="detail-gauge-center">
+        <div class="detail-gauge-status">Low</div>
+        <div class="detail-gauge-count">8 Items</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>Medium (Yellow) - 50% filled</h2>
+    <div class="detail-gauge" data-level="medium">
+      <svg viewBox="0 0 200 120" class="detail-gauge-svg" role="img" aria-label="Stock level">
+        <path class="detail-gauge-track" d="M20 100 A80 80 0 0 1 180 100" />
+        <path class="detail-gauge-fill detail-gauge-fill-medium" d="M20 100 A80 80 0 0 1 180 100"
+          style="stroke-dasharray: 251.32741228718345; stroke-dashoffset: 125.66370614359172;" />
+      </svg>
+      <div class="detail-gauge-center">
+        <div class="detail-gauge-status">Medium</div>
+        <div class="detail-gauge-count">20 Items</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>High (Green) - 87.5% filled</h2>
+    <div class="detail-gauge" data-level="high">
+      <svg viewBox="0 0 200 120" class="detail-gauge-svg" role="img" aria-label="Stock level">
+        <path class="detail-gauge-track" d="M20 100 A80 80 0 0 1 180 100" />
+        <path class="detail-gauge-fill detail-gauge-fill-high" d="M20 100 A80 80 0 0 1 180 100"
+          style="stroke-dasharray: 251.32741228718345; stroke-dashoffset: 31.415926535897933;" />
+      </svg>
+      <div class="detail-gauge-center">
+        <div class="detail-gauge-status">Full</div>
+        <div class="detail-gauge-count">35 Items</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    console.log('Debug page loaded');
+    console.log('Testing CSS classes on SVG paths');
+    
+    const paths = document.querySelectorAll('.detail-gauge-fill');
+    paths.forEach((path, index) => {
+      const classList = Array.from(path.classList);
+      const computedStyle = window.getComputedStyle(path);
+      console.log(`Path ${index + 1}:`, {
+        classes: classList,
+        stroke: computedStyle.stroke
+      });
+    });
+  </script>
+</body>
+</html>
