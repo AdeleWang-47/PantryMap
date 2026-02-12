@@ -314,8 +314,27 @@ body.modal-open {
   box-shadow: none;
   outline: 1pt solid rgba(148, 163, 184, 0.35);
 }
+.stock-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
 .stock-card-head h2 {
   margin: 0 0 12px;
+}
+.stock-source-badge {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.1);
+  padding: 4px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+.stock-source-badge-inactive {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.15);
+  font-weight: 500;
 }
 
 /* Shared card style for detail sections (wishlist) */
@@ -346,6 +365,8 @@ body.modal-open {
 .detail-gauge-svg {
   width: 100%;
   height: auto;
+  position: relative;
+  z-index: 1;
 }
 .detail-gauge-track {
   fill: none;
@@ -353,15 +374,7 @@ body.modal-open {
   stroke-width: 16;
   stroke-linecap: round;
 }
-.detail-gauge-fill {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 16;
-  stroke-linecap: round;
-  transform-origin: 50% 100%;
-  transform: rotate(-180deg);
-  transition: stroke-dashoffset 0.4s ease;
-}
+/* Removed: all styles now in inline style for proper color control */
 .detail-gauge-center {
   position: absolute;
   inset: 0;
@@ -371,6 +384,8 @@ body.modal-open {
   justify-content: flex-end;
   gap: 4px;
   padding-bottom: 8px;
+  z-index: 2;
+  pointer-events: none;
 }
 .detail-gauge-status {
   font-weight: 700;
