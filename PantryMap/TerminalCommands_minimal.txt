@@ -1,0 +1,18 @@
+# PantryMap minimal mode (frontend fallback pins)
+
+# 1) Backend (optional, in PantryMap/functions-backend)
+cd ~/Desktop/guide-map-merge/PantryMap/functions-backend
+func start --port 7071
+
+# 2) Frontend static server (in PantryMap root)
+cd ~/Desktop/guide-map-merge/PantryMap
+npx serve -l 5500 frontend
+
+# 3) Curl check: backend API on 7071 (200/500 are both acceptable for minimal mode)
+curl -i "http://localhost:7071/api/pantries?page=1&pageSize=1"
+
+# 4) Curl check: frontend fallback JSON
+curl -i "http://127.0.0.1:5500/pantries.json"
+
+# 5) Optional: frontend homepage check
+curl -i "http://127.0.0.1:5500/"
