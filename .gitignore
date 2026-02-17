@@ -4,8 +4,7 @@ node_modules/
 .env.development.local
 .env.test.local
 .env.production.local
-# Allow .env.production to be committed
-# .env.production
+.env.production
 .next/
 out/
 dist/
