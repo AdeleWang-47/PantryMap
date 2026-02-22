@@ -1,5 +1,9 @@
 # macOS
 .DS_Store
+__MACOSX/
+
+# Unnecessary / merge artifacts
+guide-map-merge/
 
 # Node / JavaScript
 node_modules/
