@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import {
   FoodsData,
   SearchableItem,
@@ -12,9 +19,18 @@ import { X } from "lucide-react";
 interface SearchBarProps {
   foodsData: FoodsData;
   onResultClick?: (categoryId: string) => void;
+  emphasizeInput?: boolean;
+  helperText?: string;
+  helperContent?: ReactNode;
 }
 
-export default function SearchBar({ foodsData, onResultClick }: SearchBarProps) {
+export default function SearchBar({
+  foodsData,
+  onResultClick,
+  emphasizeInput = false,
+  helperText,
+  helperContent,
+}: SearchBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<SearchableItem | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -145,7 +161,11 @@ export default function SearchBar({ foodsData, onResultClick }: SearchBarProps) 
               }
             }}
             placeholder="Search for an item (e.g., apple, milk)..."
-            className="w-full px-4 py-3 pr-20 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+            className={`w-full px-4 py-3 pr-20 rounded-lg text-lg focus:outline-none ${
+              emphasizeInput
+                ? "border border-emerald-300 focus:border-2 focus:border-emerald-600 focus:ring-[3px] focus:ring-emerald-600/15"
+                : "border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            }`}
           />
           {searchQuery.trim() && (
             <button
@@ -238,7 +258,13 @@ export default function SearchBar({ foodsData, onResultClick }: SearchBarProps) 
             isClosing={isClosing}
           />
         ) : (
-          <div className="h-full" />
+          <div className="h-full">
+            {helperContent ? (
+              <div className="mt-2 mb-4">{helperContent}</div>
+            ) : helperText ? (
+              <p className="mt-2 mb-4 text-sm text-gray-700">{helperText}</p>
+            ) : null}
+          </div>
         )}
       </div>
     </div>
