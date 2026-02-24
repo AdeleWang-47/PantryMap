@@ -11,15 +11,20 @@
       crossorigin=""
     />
     <link rel="stylesheet" href="./styles.css" />
-    <style>
-      /* Embedded in Next.js layout: keep only map content */
-      #app .layout {
-        height: 100%;
-      }
-    </style>
   </head>
   <body>
     <div id="app">
+      <header class="app-header">
+        <a href="./index.html" class="brand">
+          <span class="logo">🌿</span>
+          <span class="title">Pantry Map</span>
+        </a>
+        <nav class="top-nav">
+          <a href="#" class="nav-link">Food Safety Education</a>
+          <a href="./about.html" class="nav-link">About Us</a>
+        </nav>
+      </header>
+
       <main class="layout">
         <div id="map"></div>
         <aside id="details" class="details hidden">
@@ -35,9 +40,14 @@
       crossorigin=""
     ></script>
     <script>
-      window.PantryAPI_CONFIG = {
-        apiBaseUrl: "https://cmp-pantry-func-gix-6994.azurewebsites.net/api"
-      };
+      (function () {
+        const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        window.PantryAPI_CONFIG = {
+          apiBaseUrl: isLocal
+            ? 'http://127.0.0.1:7071/api'
+            : 'https://cmp-pantry-func-gix-6994.azurewebsites.net/api',
+        };
+      })();
     </script>
     <script src="./api.js"></script>
     <script src="./app.js"></script>
