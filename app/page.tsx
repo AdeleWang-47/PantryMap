@@ -27,9 +27,6 @@ export default function Home() {
           </div>
         </div>
       )}
-      <p style={{ fontSize: 12, opacity: 0.6 }}>
-        MAP_URL_ENV: {process.env.NEXT_PUBLIC_PANTRY_MAP_URL ?? "undefined"}
-      </p>
       <iframe
         src={PANTRY_MAP_URL}
         className="w-full h-full border-0"
