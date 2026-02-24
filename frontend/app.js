@@ -755,23 +755,12 @@
     const closeBtn = document.getElementById('closeDetails');
     closeBtn.addEventListener('click', () => {
       const detailsPanel = document.getElementById('details');
-      // If a pantry is selected, always go back to the list view (P2) and reset map to default 5km view
-      if (currentPantry) {
-        currentPantry = null;
-        resetMapToDefaultView();
-        detailsPanel.classList.remove('collapsed');
-        showListForCurrentView();
-        updateCollapseButton(false);
-        return;
-      }
-
-      // Otherwise (already in list view), toggle collapsed state
-      const willCollapse = !detailsPanel.classList.contains('collapsed');
-      detailsPanel.classList.toggle('collapsed', willCollapse);
-      if (!willCollapse) {
-        showListForCurrentView();
-      }
-      updateCollapseButton(detailsPanel.classList.contains('collapsed'));
+  	    // 无论当前是列表还是详情，都回到「所有 pantry 列表 + 默认 5km 地图」视图
+  	    currentPantry = null;
+  	    resetMapToDefaultView();
+  	    detailsPanel.classList.remove('collapsed');
+  	    showListForCurrentView();
+  	    updateCollapseButton(false);
     });
     
     // Status filter
