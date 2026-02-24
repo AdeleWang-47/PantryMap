@@ -20,8 +20,16 @@ const faqItems = [
     answer: (
       <div className="space-y-2">
         <p className={faqAnswerParagraphClassName}>
-          Under the federal Bill Emerson Good Samaritan Food Donation Act,
-          individuals and organizations involved in donating or distributing
+          Under the federal{" "}
+          <a
+            href="https://www.congress.gov/bill/117th-congress/senate-bill/5329/text"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-blue-600 underline hover:text-blue-700 cursor-pointer"
+          >
+            Bill Emerson Good Samaritan Food Donation Act
+          </a>
+          , individuals and organizations involved in donating or distributing
           food, including individual donors, community fridge operators, mutual
           aid groups, nonprofits, businesses, and government entities, are
           generally protected from liability if someone becomes ill from donated
@@ -43,7 +51,7 @@ const faqItems = [
             href="https://chlpi.org/wp-content/uploads/2022/01/Fridge-QA-FINAL.pdf"
             target="_blank"
             rel="noreferrer noopener"
-            className="text-black hover:underline underline-offset-2"
+            className="text-blue-600 underline hover:text-blue-700 cursor-pointer"
           >
             Harvard’s Legal Questions and Answers on Community Fridges
           </a>
@@ -67,21 +75,24 @@ const faqItems = [
         </p>
         <ul className={cardListClassName}>
           <li>
-            “Best if Used By/Before”: dates indicate when a product will be of
-            best flavor or quality. It is not a purchase or safety date.
+            <strong>“Best if Used By/Before”:</strong> dates indicate when a
+            product will be of best flavor or quality. It is not a purchase or
+            safety date.
           </li>
           <li>
-            “Sell-By”: dates tell the store how long to display the product for
-            sale for inventory management. It is also not a safety date.
+            <strong>“Sell-By”:</strong> dates tell the store how long to display
+            the product for sale for inventory management. It is also not a
+            safety date.
           </li>
           <li>
-            “Use-By” dates are the last date recommended for the use of the
-            product while at peak quality. It is not a safety date except for
-            when used on infant formula.
+            <strong>“Use-By”</strong> dates are the last date recommended for
+            the use of the product while at peak quality. It is not a safety
+            date except for when used on infant formula.
           </li>
           <li>
-            “Freeze-By” dates indicate when a product should be frozen to
-            maintain peak quality. Again, it is not a purchase or safety date.
+            <strong>“Freeze-By”</strong> dates indicate when a product should be
+            frozen to maintain peak quality. Again, it is not a purchase or
+            safety date.
           </li>
         </ul>
         <p className={faqAnswerParagraphClassName}>
@@ -90,7 +101,7 @@ const faqItems = [
             href="https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/food-safety-basics/food-product-dating"
             target="_blank"
             rel="noreferrer noopener"
-            className="text-black hover:underline underline-offset-2"
+            className="text-blue-600 underline hover:text-blue-700 cursor-pointer"
           >
             the USDA Food Product Dating webpage
           </a>
@@ -155,10 +166,18 @@ const faqItems = [
           Recommended food label should include:
         </p>
         <ul className={cardListClassName}>
-          <li>Name of the dish</li>
-          <li>Date it was made</li>
-          <li>Location where it was made</li>
-          <li>All ingredients and potential allergens</li>
+          <li>
+            <strong>Name of the dish</strong>
+          </li>
+          <li>
+            <strong>Date it was made</strong>
+          </li>
+          <li>
+            <strong>Location where it was made</strong>
+          </li>
+          <li>
+            <strong>All ingredients and potential allergens</strong>
+          </li>
         </ul>
       </div>
     ),
