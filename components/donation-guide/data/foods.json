@@ -47,7 +47,7 @@
         },
         {
           "id": "prepared-meals",
-          "title": "Prepared meals",
+          "title": "Commercially prepared meals",
           "icon": "meals",
           "examples": ["Refrigerated meals", "Soups", "Sandwiches", "Salads"],
           "considerations": "Original, unopened packaging, and maintained at proper temperatures (< 41°F)",
@@ -133,7 +133,7 @@
       "subcategories": [
         {
           "id": "homemade-food",
-          "title": "Homemade food",
+          "title": "Homemade food (except baked items)",
           "icon": "homemade-food",
           "examples": ["Homemade soups", "Casseroles", "Prepared meals"],
           "considerations": "Not recommended due to increased food safety risk",
@@ -241,9 +241,9 @@
     { "name": "Diapers", "categoryId": "check-with-site", "parentItem": "Hygiene items" },
     { "name": "Tampons", "categoryId": "check-with-site", "parentItem": "Hygiene items" },
     { "name": "Pads", "categoryId": "check-with-site", "parentItem": "Hygiene items" },
-    { "name": "Homemade soup", "categoryId": "avoid", "parentItem": "Homemade food" },
-    { "name": "Homemade casserole", "categoryId": "avoid", "parentItem": "Homemade food" },
-    { "name": "Leftover food", "categoryId": "avoid", "parentItem": "Homemade food" },
+    { "name": "Homemade soup", "categoryId": "avoid", "parentItem": "Homemade food (except baked items)" },
+    { "name": "Homemade casserole", "categoryId": "avoid", "parentItem": "Homemade food (except baked items)" },
+    { "name": "Leftover food", "categoryId": "avoid", "parentItem": "Homemade food (except baked items)" },
     { "name": "Home-canned vegetables", "categoryId": "avoid", "parentItem": "Home-canned goods" },
     { "name": "Homemade jam", "categoryId": "avoid", "parentItem": "Home-canned goods" },
     { "name": "Homemade pickles", "categoryId": "avoid", "parentItem": "Home-canned goods" },
