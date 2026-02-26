@@ -313,7 +313,7 @@
   }
 
   function derivePantryType(p = {}) {
-    const raw = p.refrigerated ?? p.pantryType ?? p.type ?? '';
+    const raw = p.refrigerated ?? p.pantryType ?? p.type ?? p.pantry_type ?? '';
     const normalizeString = (value) => String(value).trim().toLowerCase();
 
     if (Array.isArray(raw)) {
@@ -323,17 +323,23 @@
       if (hasFridge && hasShelf) return 'shelf+fridge';
       if (hasFridge) return 'fridge';
       if (hasShelf) return 'shelf';
+      return '';
     } else if (typeof raw === 'string') {
       const lowered = normalizeString(raw);
-      if (!lowered) return 'shelf';
+      if (!lowered) return '';
       if (/(both|and|\+|all)/.test(lowered) && lowered.includes('fridge')) return 'shelf+fridge';
       if (lowered.includes('fridge') || lowered.includes('refrigerat') || lowered.includes('cooler')) return 'fridge';
       if (lowered.includes('shelf') || lowered.includes('pantry')) return 'shelf';
+      if (/^(true|yes|1)$/.test(lowered)) return 'fridge';
+      if (/^(false|no|0)$/.test(lowered)) return 'shelf';
+      return '';
     } else if (typeof raw === 'boolean') {
+      return raw ? 'fridge' : 'shelf';
+    } else if (typeof raw === 'number') {
       return raw ? 'fridge' : 'shelf';
     }
 
-    return 'shelf';
+    return '';
   }
 
   /**
@@ -1232,7 +1238,7 @@
   }
 
   function derivePantryType(p = {}) {
-    const raw = p.refrigerated ?? p.pantryType ?? p.type ?? '';
+    const raw = p.refrigerated ?? p.pantryType ?? p.type ?? p.pantry_type ?? '';
     const normalizeString = (value) => String(value).trim().toLowerCase();
 
     if (Array.isArray(raw)) {
@@ -1242,17 +1248,23 @@
       if (hasFridge && hasShelf) return 'shelf+fridge';
       if (hasFridge) return 'fridge';
       if (hasShelf) return 'shelf';
+      return '';
     } else if (typeof raw === 'string') {
       const lowered = normalizeString(raw);
-      if (!lowered) return 'shelf';
+      if (!lowered) return '';
       if (/(both|and|\+|all)/.test(lowered) && lowered.includes('fridge')) return 'shelf+fridge';
       if (lowered.includes('fridge') || lowered.includes('refrigerat') || lowered.includes('cooler')) return 'fridge';
       if (lowered.includes('shelf') || lowered.includes('pantry')) return 'shelf';
+      if (/^(true|yes|1)$/.test(lowered)) return 'fridge';
+      if (/^(false|no|0)$/.test(lowered)) return 'shelf';
+      return '';
     } else if (typeof raw === 'boolean') {
+      return raw ? 'fridge' : 'shelf';
+    } else if (typeof raw === 'number') {
       return raw ? 'fridge' : 'shelf';
     }
 
-    return 'shelf';
+    return '';
   }
 
   /**

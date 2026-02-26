@@ -278,7 +278,7 @@
         <div class="map-legend-title">Legend</div>
         <div class="map-legend-item"><span class="map-legend-pin" style="background:#3b82f6"></span> Fridge</div>
         <div class="map-legend-item"><span class="map-legend-pin" style="background:#f59e0b"></span> Shelf</div>
-        <div class="map-legend-item"><span class="map-legend-pin" style="background:#52b788"></span> Uncategorized</div>
+        <div class="map-legend-item"><span class="map-legend-pin" style="background:#52b788"></span> Shelf & Fridge</div>
       `;
       return div;
     };
@@ -368,7 +368,7 @@
       `;
     }
     return `
-      <h2>Pantries in view (${items.length})</h2>
+      <h2>Pantries in view</h2>
       <div class="list-controls">
         <label>
           <span>Type</span>
@@ -458,53 +458,67 @@
     
     console.log(`Creating marker for ${pantry.name} at [${pantry.location.lat}, ${pantry.location.lng}]`);
 
-    // Determine marker color based on pantryType (shelf vs fridge)
+    const icon = getMarkerIcon(pantry, false);
+    const marker = L.marker([pantry.location.lat, pantry.location.lng], { icon })
+      .addTo(map);
+    marker._pantry = pantry;
+    marker.on('click', () => {
+      showPantryDetails(pantry);
+    });
+    markers.set(pantry.id, marker);
+  }
+
+  function getMarkerIcon(pantry, isSelected) {
     const pantryType = (pantry.pantryType || '').toLowerCase();
-    const typeColors = {
-      'shelf': '#f59e0b',   // Orange for shelf
-      'fridge': '#3b82f6'   // Blue for fridge
-    };
-    
-    const color = typeColors[pantryType] || '#52b788'; // Default green if type unknown
-    
-    // Create custom icon with color based on pantry type
-    const icon = L.divIcon({
+    const typeColors = { 'shelf': '#f59e0b', 'fridge': '#3b82f6', 'shelf+fridge': '#52b788' };
+    const typeColorsDark = { 'shelf': '#b45309', 'fridge': '#1d4ed8', 'shelf+fridge': '#2d6a4f' };
+    const color = typeColors[pantryType] || '#f59e0b';
+    const colorDark = typeColorsDark[pantryType] || '#b45309';
+    const selectedColor = isSelected ? colorDark : color;
+    if (isSelected) {
+      return L.divIcon({
+        className: 'pantry-marker pantry-marker-selected',
+        html: `<div style="
+          width: 40px; height: 40px;
+          border: 4px solid ${selectedColor};
+          background: white;
+          border-radius: 50%;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: transform 0.2s;
+        " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+          <div style="width: 16px; height: 16px; background: ${selectedColor}; border-radius: 50%;"></div>
+        </div>`,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+      });
+    }
+    return L.divIcon({
       className: 'pantry-marker',
       html: `<div style="
-        width: 32px;
-        height: 32px;
+        width: 32px; height: 32px;
         background: ${color};
         border: 3px solid white;
         border-radius: 50%;
         box-shadow: 0 3px 8px rgba(0,0,0,0.25);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: transform 0.2s;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; transition: transform 0.2s;
       " onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
-        <div style="
-          width: 12px;
-          height: 12px;
-          background: white;
-          border-radius: 50%;
-        "></div>
+        <div style="width: 12px; height: 12px; background: white; border-radius: 50%;"></div>
       </div>`,
       iconSize: [32, 32],
       iconAnchor: [16, 16]
     });
+  }
 
-    // Create marker
-    const marker = L.marker([pantry.location.lat, pantry.location.lng], { icon })
-      .addTo(map);
-    
-    // Add click handler
-    marker.on('click', () => {
-      showPantryDetails(pantry);
+  function updateMarkerIcons() {
+    const selectedId = currentPantry ? String(currentPantry.id) : null;
+    markers.forEach(function (marker) {
+      const pantry = marker._pantry;
+      if (!pantry) return;
+      const isSelected = selectedId !== null && String(pantry.id) === selectedId;
+      marker.setIcon(getMarkerIcon(pantry, isSelected));
     });
-    
-    // Store marker reference
-    markers.set(pantry.id, marker);
   }
 
   /** Refresh stock section from telemetry (sensor or donations). Call after posting a donation so the badge updates. */
@@ -654,7 +668,7 @@
     detailsPanel.classList.remove('collapsed');
     updateCollapseButton(false);
     
-    // Pan/zoom map to marker
+    // Pan/zoom map so selected pin is centered in the map area
     const marker = markers.get(pantry.id);
     if (marker) {
       const target = marker.getLatLng();
@@ -669,6 +683,7 @@
       const targetZoom = Math.max(map.getZoom(), 16);
       map.setView(target, targetZoom);
     }
+    updateMarkerIcons();
   }
 
   // Render pantry details HTML
@@ -755,8 +770,8 @@
     const closeBtn = document.getElementById('closeDetails');
     closeBtn.addEventListener('click', () => {
       const detailsPanel = document.getElementById('details');
-  	    // 无论当前是列表还是详情，都回到「所有 pantry 列表 + 默认 5km 地图」视图
   	    currentPantry = null;
+  	    updateMarkerIcons();
   	    resetMapToDefaultView();
   	    detailsPanel.classList.remove('collapsed');
   	    showListForCurrentView();
@@ -1508,10 +1523,6 @@
             <span>Item name</span>
             <input type="text" name="item" maxlength="80" required placeholder="e.g. Rice" />
           </label>
-          <label>
-            <span>Quantity</span>
-            <input type="number" name="quantity" min="1" max="99" value="1" />
-          </label>
           <p class="wishlist-modal-hint">Items stay visible for 7 days.</p>
           <div class="wishlist-modal-error" aria-live="polite"></div>
           <div class="wishlist-modal-actions">
@@ -1550,8 +1561,7 @@
       errorEl.textContent = '';
       const formData = new FormData(form);
       const item = String(formData.get('item') || '').trim();
-      let quantity = parseInt(formData.get('quantity'), 10);
-      if (!Number.isFinite(quantity) || quantity <= 0) quantity = 1;
+      const quantity = 1;
       if (!item) {
         errorEl.textContent = 'Please enter an item name.';
         return;
@@ -1934,7 +1944,7 @@
         <div class="map-legend-title">Legend</div>
         <div class="map-legend-item"><span class="map-legend-pin" style="background:#3b82f6"></span> Fridge</div>
         <div class="map-legend-item"><span class="map-legend-pin" style="background:#f59e0b"></span> Shelf</div>
-        <div class="map-legend-item"><span class="map-legend-pin" style="background:#52b788"></span> Fridge & Shelf</div>
+        <div class="map-legend-item"><span class="map-legend-pin" style="background:#52b788"></span> Shelf & Fridge</div>
       `;
       return div;
     };
@@ -2024,7 +2034,7 @@
       `;
     }
     return `
-      <h2>Pantries in view (${items.length})</h2>
+      <h2>Pantries in view</h2>
       <div class="list-controls">
         <label>
           <span>Type</span>
@@ -2114,53 +2124,67 @@
     
     console.log(`Creating marker for ${pantry.name} at [${pantry.location.lat}, ${pantry.location.lng}]`);
 
-    // Determine marker color based on pantryType (shelf vs fridge)
+    const icon = getMarkerIcon(pantry, false);
+    const marker = L.marker([pantry.location.lat, pantry.location.lng], { icon })
+      .addTo(map);
+    marker._pantry = pantry;
+    marker.on('click', () => {
+      showPantryDetails(pantry);
+    });
+    markers.set(pantry.id, marker);
+  }
+
+  function getMarkerIcon(pantry, isSelected) {
     const pantryType = (pantry.pantryType || '').toLowerCase();
-    const typeColors = {
-      'shelf': '#f59e0b',   // Orange for shelf
-      'fridge': '#3b82f6'   // Blue for fridge
-    };
-    
-    const color = typeColors[pantryType] || '#52b788'; // Default green if type unknown
-    
-    // Create custom icon with color based on pantry type
-    const icon = L.divIcon({
+    const typeColors = { 'shelf': '#f59e0b', 'fridge': '#3b82f6', 'shelf+fridge': '#52b788' };
+    const typeColorsDark = { 'shelf': '#b45309', 'fridge': '#1d4ed8', 'shelf+fridge': '#2d6a4f' };
+    const color = typeColors[pantryType] || '#f59e0b';
+    const colorDark = typeColorsDark[pantryType] || '#b45309';
+    const selectedColor = isSelected ? colorDark : color;
+    if (isSelected) {
+      return L.divIcon({
+        className: 'pantry-marker pantry-marker-selected',
+        html: `<div style="
+          width: 40px; height: 40px;
+          border: 4px solid ${selectedColor};
+          background: white;
+          border-radius: 50%;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: transform 0.2s;
+        " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+          <div style="width: 16px; height: 16px; background: ${selectedColor}; border-radius: 50%;"></div>
+        </div>`,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+      });
+    }
+    return L.divIcon({
       className: 'pantry-marker',
       html: `<div style="
-        width: 32px;
-        height: 32px;
+        width: 32px; height: 32px;
         background: ${color};
         border: 3px solid white;
         border-radius: 50%;
         box-shadow: 0 3px 8px rgba(0,0,0,0.25);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: transform 0.2s;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; transition: transform 0.2s;
       " onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
-        <div style="
-          width: 12px;
-          height: 12px;
-          background: white;
-          border-radius: 50%;
-        "></div>
+        <div style="width: 12px; height: 12px; background: white; border-radius: 50%;"></div>
       </div>`,
       iconSize: [32, 32],
       iconAnchor: [16, 16]
     });
+  }
 
-    // Create marker
-    const marker = L.marker([pantry.location.lat, pantry.location.lng], { icon })
-      .addTo(map);
-    
-    // Add click handler
-    marker.on('click', () => {
-      showPantryDetails(pantry);
+  function updateMarkerIcons() {
+    const selectedId = currentPantry ? String(currentPantry.id) : null;
+    markers.forEach(function (marker) {
+      const pantry = marker._pantry;
+      if (!pantry) return;
+      const isSelected = selectedId !== null && String(pantry.id) === selectedId;
+      marker.setIcon(getMarkerIcon(pantry, isSelected));
     });
-    
-    // Store marker reference
-    markers.set(pantry.id, marker);
   }
 
   /** Refresh stock section from telemetry (sensor or donations). Call after posting a donation so the badge updates. */
@@ -2310,7 +2334,7 @@
     detailsPanel.classList.remove('collapsed');
     updateCollapseButton(false);
     
-    // Pan/zoom map to marker
+    // Pan/zoom map so selected pin is centered in the map area
     const marker = markers.get(pantry.id);
     if (marker) {
       const target = marker.getLatLng();
@@ -2325,6 +2349,7 @@
       const targetZoom = Math.max(map.getZoom(), 16);
       map.setView(target, targetZoom);
     }
+    updateMarkerIcons();
   }
 
   // Render pantry details HTML
@@ -2411,8 +2436,8 @@
     const closeBtn = document.getElementById('closeDetails');
     closeBtn.addEventListener('click', () => {
       const detailsPanel = document.getElementById('details');
-  	    // 无论当前是列表还是详情，都回到「所有 pantry 列表 + 默认 5km 地图」视图
   	    currentPantry = null;
+  	    updateMarkerIcons();
   	    resetMapToDefaultView();
   	    detailsPanel.classList.remove('collapsed');
   	    showListForCurrentView();
@@ -3148,10 +3173,6 @@
             <span>Item name</span>
             <input type="text" name="item" maxlength="80" required placeholder="e.g. Rice" />
           </label>
-          <label>
-            <span>Quantity</span>
-            <input type="number" name="quantity" min="1" max="99" value="1" />
-          </label>
           <p class="wishlist-modal-hint">Items stay visible for 7 days.</p>
           <div class="wishlist-modal-error" aria-live="polite"></div>
           <div class="wishlist-modal-actions">
@@ -3190,8 +3211,7 @@
       errorEl.textContent = '';
       const formData = new FormData(form);
       const item = String(formData.get('item') || '').trim();
-      let quantity = parseInt(formData.get('quantity'), 10);
-      if (!Number.isFinite(quantity) || quantity <= 0) quantity = 1;
+      const quantity = 1;
       if (!item) {
         errorEl.textContent = 'Please enter an item name.';
         return;

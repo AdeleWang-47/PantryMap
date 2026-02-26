@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:webpack": "next dev --webpack",
+    "dev": "next dev --webpack",
+    "dev:turbopack": "next dev",
+    "dev:map": "python3 -m http.server 8080 --directory PantryMap/frontend",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -24,5 +25,8 @@
     "eslint-config-next": "16.1.4",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "lightningcss-darwin-arm64": "^1.30.2"
   }
 }
