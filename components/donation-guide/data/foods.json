@@ -6,44 +6,52 @@
       "color": "green",
       "subcategories": [
         {
-          "id": "pantry-items",
-          "title": "Pantry items",
+          "id": "canned-pantry-items",
+          "title": "Canned pantry items",
           "icon": "pantry",
-          "examples": ["Canned or dry beans", "Dry pasta", "Bagged rice", "Cereal"],
+          "examples": ["Canned beans", "Canned soup", "Canned vegetables", "Canned fruit"],
           "considerations": "Avoid donating cans that are rusty or dented",
+          "storage": "pantry"
+        },
+        {
+          "id": "dry-pantry-staples",
+          "title": "Dry pantry staples",
+          "icon": "pantry",
+          "examples": ["Dry pasta", "Bagged rice", "Oatmeal", "Cereal", "Flour", "Sugar"],
+          "considerations": "Original, unopened packaging",
           "storage": "pantry"
         },
         {
           "id": "produce",
           "title": "Produce",
           "icon": "produce",
-          "examples": ["Whole, uncut fruits", "Fresh vegetables", "From store or garden"],
-          "considerations": "Should be fresh with no visible damage",
-          "storage": "fridge"
+          "examples": ["Apples", "Bananas", "Carrots", "Lettuce", "Tomatoes", "Potatoes"],
+          "considerations": "Fruits & vegetables from the store or garden",
+          "storage": "Fridge"
         },
         {
           "id": "bread-baked",
-          "title": "Bread & Baked goods",
+          "title": "Store-bought bread & other baked goods",
           "icon": "bread",
           "examples": ["Bread", "Muffins", "Cookies"],
           "considerations": "Original, unopened packaging",
-          "storage": "pantry"
+          "storage": "Store according to label"
         },
         {
           "id": "homemade-baked",
           "title": "Homemade baked goods",
           "icon": "cookie",
           "examples": ["Muffins", "Cookies", "Cakes", "Pies"],
-          "considerations": "Donate individually packaged items and label with name of item, date prepared, and ingredients",
-          "storage": "pantry"
+          "considerations": "Donate individually packaged items and label with the name of the item, date prepared, and ingredients",
+          "storage": "Pantry or fridge"
         },
         {
           "id": "frozen-produce",
           "title": "Frozen produce",
           "icon": "frozen",
-          "examples": ["Frozen peas", "Frozen berries", "Frozen vegetables"],
+          "examples": ["Frozen peas", "Frozen berries"],
           "considerations": "Original, unopened packaging, and maintained at proper temperatures (< 41°F)",
-          "storage": "freezer"
+          "storage": "Freezer"
         },
         {
           "id": "prepared-meals",
@@ -55,10 +63,10 @@
         },
         {
           "id": "donor-kitchen",
-          "title": "Meals from donor kitchen",
+          "title": "Meals prepared in a donor kitchen",
           "icon": "pot",
-          "examples": ["Meals from community centers", "Faith-based organization meals"],
-          "considerations": "Must be maintained at proper temperatures (< 41°F), individually packaged, and labeled with name, date prepared, location, and ingredients",
+          "examples": ["Refrigerated meals", "Soups", "Sandwiches", "Salads"],
+          "considerations": "Meals should be maintained at proper temperatures (< 41°F), individually packaged, and labeled with the name of the item, date prepared, location prepared, and ingredients",
           "storage": "fridge"
         },
         {
@@ -66,8 +74,8 @@
           "title": "Baby food",
           "icon": "baby",
           "examples": ["Baby food", "Infant formula"],
-          "considerations": "Infant formula must NOT be expired. Best-by dates DO apply as a safety date for formula",
-          "storage": "pantry"
+          "considerations": "Infant formula must NOT be expired",
+          "storage": "Store according to label"
         },
         {
           "id": "pet-food",
@@ -106,7 +114,7 @@
           "icon": "meat",
           "examples": ["Chicken", "Beef", "Pork"],
           "considerations": "Original, unopened packaging, and maintained at proper temperatures (< 41°F). Some sites may require raw meat to be frozen",
-          "storage": "fridge"
+          "storage": "Fridge or freezer"
         },
         {
           "id": "shellfish",
@@ -114,7 +122,7 @@
           "icon": "shellfish",
           "examples": ["Shrimp", "Crab", "Lobster"],
           "considerations": "Original, unopened packaging, and maintained at proper temperatures (< 41°F)",
-          "storage": "fridge"
+          "storage": "Fridge or freezer"
         },
         {
           "id": "hygiene-items",
@@ -184,6 +192,16 @@
   ],
   "searchableItems": [
     { "name": "Apple", "categoryId": "yes-donate", "parentItem": "Produce" },
+    { "name": "Produce", "categoryId": "yes-donate", "parentItem": "Produce" },
+    { "name": "Canned pantry items", "categoryId": "yes-donate", "parentItem": "Canned pantry items" },
+    { "name": "Dry pantry staples", "categoryId": "yes-donate", "parentItem": "Dry pantry staples" },
+    { "name": "Store-bought bread & other baked goods", "categoryId": "yes-donate", "parentItem": "Store-bought bread & other baked goods" },
+    { "name": "Homemade baked goods", "categoryId": "yes-donate", "parentItem": "Homemade baked goods" },
+    { "name": "Frozen produce", "categoryId": "yes-donate", "parentItem": "Frozen produce" },
+    { "name": "Commercially prepared meals", "categoryId": "yes-donate", "parentItem": "Commercially prepared meals" },
+    { "name": "Meals prepared in a donor kitchen", "categoryId": "yes-donate", "parentItem": "Meals prepared in a donor kitchen" },
+    { "name": "Meals prepared in a donor kitchen (e.g. at a community center or faith-based organization)", "categoryId": "yes-donate", "parentItem": "Meals prepared in a donor kitchen" },
+    { "name": "Pet food", "categoryId": "yes-donate", "parentItem": "Pet food" },
     { "name": "Banana", "categoryId": "yes-donate", "parentItem": "Produce" },
     { "name": "Orange", "categoryId": "yes-donate", "parentItem": "Produce" },
     { "name": "Carrot", "categoryId": "yes-donate", "parentItem": "Produce" },
@@ -197,28 +215,35 @@
     { "name": "Frozen berries", "categoryId": "yes-donate", "parentItem": "Frozen produce" },
     { "name": "Frozen corn", "categoryId": "yes-donate", "parentItem": "Frozen produce" },
     { "name": "Frozen spinach", "categoryId": "yes-donate", "parentItem": "Frozen produce" },
-    { "name": "Rice", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Pasta", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Cereal", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Canned beans", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Canned soup", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Canned vegetables", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Canned fruit", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Peanut butter", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Oatmeal", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Flour", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Sugar", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Cooking oil", "categoryId": "yes-donate", "parentItem": "Pantry items" },
-    { "name": "Bread", "categoryId": "yes-donate", "parentItem": "Bread & Baked goods" },
-    { "name": "Muffins", "categoryId": "yes-donate", "parentItem": "Bread & Baked goods" },
-    { "name": "Cookies", "categoryId": "yes-donate", "parentItem": "Bread & Baked goods" },
-    { "name": "Crackers", "categoryId": "yes-donate", "parentItem": "Bread & Baked goods" },
-    { "name": "Bagels", "categoryId": "yes-donate", "parentItem": "Bread & Baked goods" },
+    { "name": "Rice", "categoryId": "yes-donate", "parentItem": "Dry pantry staples" },
+    { "name": "Pasta", "categoryId": "yes-donate", "parentItem": "Dry pantry staples" },
+    { "name": "Cereal", "categoryId": "yes-donate", "parentItem": "Dry pantry staples" },
+    { "name": "Canned beans", "categoryId": "yes-donate", "parentItem": "Canned pantry items" },
+    { "name": "Canned soup", "categoryId": "yes-donate", "parentItem": "Canned pantry items" },
+    { "name": "Canned vegetables", "categoryId": "yes-donate", "parentItem": "Canned pantry items" },
+    { "name": "Canned fruit", "categoryId": "yes-donate", "parentItem": "Canned pantry items" },
+    { "name": "Peanut butter", "categoryId": "yes-donate", "parentItem": "Dry pantry staples" },
+    { "name": "Oatmeal", "categoryId": "yes-donate", "parentItem": "Dry pantry staples" },
+    { "name": "Flour", "categoryId": "yes-donate", "parentItem": "Dry pantry staples" },
+    { "name": "Sugar", "categoryId": "yes-donate", "parentItem": "Dry pantry staples" },
+    { "name": "Cooking oil", "categoryId": "yes-donate", "parentItem": "Dry pantry staples" },
+    { "name": "Bread", "categoryId": "yes-donate", "parentItem": "Store-bought bread & other baked goods" },
+    { "name": "Bread & Baked goods", "categoryId": "yes-donate", "parentItem": "Store-bought bread & other baked goods" },
+    { "name": "Baked goods", "categoryId": "yes-donate", "parentItem": "Store-bought bread & other baked goods" },
+    { "name": "Muffins", "categoryId": "yes-donate", "parentItem": "Store-bought bread & other baked goods" },
+    { "name": "Cookies", "categoryId": "yes-donate", "parentItem": "Store-bought bread & other baked goods" },
+    { "name": "Crackers", "categoryId": "yes-donate", "parentItem": "Store-bought bread & other baked goods" },
+    { "name": "Bagels", "categoryId": "yes-donate", "parentItem": "Store-bought bread & other baked goods" },
     { "name": "Baby food", "categoryId": "yes-donate", "parentItem": "Baby food" },
     { "name": "Infant formula", "categoryId": "yes-donate", "parentItem": "Baby food" },
     { "name": "Formula", "categoryId": "yes-donate", "parentItem": "Baby food" },
     { "name": "Dog food", "categoryId": "yes-donate", "parentItem": "Pet food" },
     { "name": "Cat food", "categoryId": "yes-donate", "parentItem": "Pet food" },
+    { "name": "Dairy & Eggs", "categoryId": "check-with-site", "parentItem": "Dairy & Eggs" },
+    { "name": "Deli meat", "categoryId": "check-with-site", "parentItem": "Deli meat" },
+    { "name": "Raw meat", "categoryId": "check-with-site", "parentItem": "Raw meat" },
+    { "name": "Shellfish", "categoryId": "check-with-site", "parentItem": "Shellfish" },
+    { "name": "Hygiene items", "categoryId": "check-with-site", "parentItem": "Hygiene items" },
     { "name": "Milk", "categoryId": "check-with-site", "parentItem": "Dairy & Eggs" },
     { "name": "Cheese", "categoryId": "check-with-site", "parentItem": "Dairy & Eggs" },
     { "name": "Yogurt", "categoryId": "check-with-site", "parentItem": "Dairy & Eggs" },
@@ -226,6 +251,7 @@
     { "name": "Butter", "categoryId": "check-with-site", "parentItem": "Dairy & Eggs" },
     { "name": "Cream cheese", "categoryId": "check-with-site", "parentItem": "Dairy & Eggs" },
     { "name": "Chicken", "categoryId": "check-with-site", "parentItem": "Raw meat" },
+    { "name": "Meat", "categoryId": "check-with-site", "parentItem": "Raw meat" },
     { "name": "Beef", "categoryId": "check-with-site", "parentItem": "Raw meat" },
     { "name": "Pork", "categoryId": "check-with-site", "parentItem": "Raw meat" },
     { "name": "Ground beef", "categoryId": "check-with-site", "parentItem": "Raw meat" },
@@ -249,6 +275,11 @@
     { "name": "Homemade pickles", "categoryId": "avoid", "parentItem": "Home-canned goods" },
     { "name": "Raw milk", "categoryId": "avoid", "parentItem": "Unpasteurized milk" },
     { "name": "Unpasteurized milk", "categoryId": "avoid", "parentItem": "Unpasteurized milk" },
+    { "name": "Homemade food (except baked items)", "categoryId": "avoid", "parentItem": "Homemade food (except baked items)" },
+    { "name": "Home-canned goods", "categoryId": "avoid", "parentItem": "Home-canned goods" },
+    { "name": "Rotten/spoiled food", "categoryId": "avoid", "parentItem": "Rotten/spoiled food" },
+    { "name": "Dented or rusty cans", "categoryId": "avoid", "parentItem": "Dented or rusty cans" },
+    { "name": "Open containers", "categoryId": "avoid", "parentItem": "Open containers" },
     { "name": "Moldy food", "categoryId": "avoid", "parentItem": "Rotten/spoiled food" },
     { "name": "Spoiled food", "categoryId": "avoid", "parentItem": "Rotten/spoiled food" },
     { "name": "Expired food", "categoryId": "avoid", "parentItem": "Rotten/spoiled food" },

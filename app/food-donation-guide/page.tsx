@@ -362,8 +362,9 @@ export default function FoodDonationGuideLandingPage() {
               Donation Guide
             </h1>
             <p className="mt-1 max-w-xl text-base text-black">
-              Learn the basics of donating thoughtfully, then use the tool to
-              check a specific item or category.
+              Learn best practices for donating to a micropantry or community
+              fridge and use the item look-up feature to learn more about
+              specific food items.
             </p>
 
             <div className="mt-2">
@@ -409,8 +410,11 @@ export default function FoodDonationGuideLandingPage() {
               </p>
               <p>
                 It is important to note that the following food safety guidance
-                is just that – guidance. When in doubt, consider whether you
-                would feed the food item to members of your own family.
+                is just that – guidance.{" "}
+                <strong>
+                  When in doubt, consider whether you would feed the food item
+                  to members of your own family.
+                </strong>{" "}
                 Sometimes, composting the food is the safest option. Your local
                 micro-pantry or community fridge may also provide their own
                 donation guidelines to ensure food safety at their sites. Please
@@ -424,9 +428,6 @@ export default function FoodDonationGuideLandingPage() {
           <h2 className="text-2xl font-semibold text-black">
             Quick Guidance
           </h2>
-          <p className={`${guidanceLabelClassName} max-w-2xl`}>
-            Donation Tips:
-          </p>
           <div className="mt-4 grid gap-6 md:grid-cols-3">
             <div className={guidanceCardClassName}>
               <h3 className="text-lg font-semibold text-black mt-0 mb-4">

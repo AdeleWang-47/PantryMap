@@ -5,6 +5,7 @@ import {
   SearchableItem,
   SubCategory,
 } from "@/components/donation-guide/types/foods";
+import { DonationIcon } from "@/components/donation-guide/icons";
 
 interface SearchResultsProps {
   results: SearchableItem[];
@@ -82,16 +83,45 @@ export default function SearchResults({
     );
   }
 
+  const categoryRowsByParent = new Map<
+    string,
+    { item: SearchableItem; subcategory: SubCategory; score: number }
+  >();
+  const itemRows: SearchableItem[] = [];
+
+  results.forEach((item) => {
+    const subcategory = getSubcategory(item);
+    const isCategoryAlias = Boolean(subcategory) && item.name === item.parentItem;
+
+    if (isCategoryAlias && subcategory && item.parentItem) {
+      const key = `${item.categoryId}::${item.parentItem}`;
+      const score = 1;
+      const existing = categoryRowsByParent.get(key);
+      if (!existing || score > existing.score) {
+        categoryRowsByParent.set(key, { item, subcategory, score });
+      }
+      return;
+    }
+
+    itemRows.push(item);
+  });
+
+  const orderedResults = [
+    ...Array.from(categoryRowsByParent.values()).map((entry) => entry.item),
+    ...itemRows,
+  ];
+
   return (
     <div
       className={`bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto ${
         isClosing ? "opacity-0" : "opacity-100"
       }`}
     >
-      {results.map((item, index) => {
+      {orderedResults.map((item, index) => {
         const color = getCategoryColor(item.categoryId);
         const categoryName = getCategoryName(item.categoryId);
         const subcategory = getSubcategory(item);
+        const isCategoryResult = Boolean(subcategory) && item.name === item.parentItem;
         const considerations = subcategory?.considerations || "";
         const considerationParts = getConsiderationParts(considerations);
         const storage = subcategory?.storage || "none";
@@ -105,12 +135,39 @@ export default function SearchResults({
               e.preventDefault();
               onSelect(item);
             }}
+            onClick={() => {
+              // Keep keyboard activation (Enter/Space) working on button rows.
+              // Mouse selection is handled onMouseDown to avoid blur/dropdown race.
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(item);
+              }
+            }}
             className={`w-full text-left p-4 border-l-4 ${borderColors[color as keyof typeof borderColors] || borderColors.gray} border-b border-gray-200 last:border-b-0 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
               color === "green" ? "focus:ring-green-500" :
               color === "yellow" ? "focus:ring-yellow-500" : "focus:ring-red-500"
             }`}
           >
             <div className="flex-1">
+              {isCategoryResult ? (
+                <div className="flex items-center gap-2">
+                  <DonationIcon
+                    iconKey={subcategory?.icon || "pantry"}
+                    className="h-4 w-4 text-gray-700 shrink-0"
+                  />
+                  <h3 className="font-semibold text-gray-900 text-sm leading-5">
+                    {item.name}
+                  </h3>
+                  <span
+                    className={`px-2 py-1 text-xs font-medium rounded ${categoryBadgeColors[color as keyof typeof categoryBadgeColors] || categoryBadgeColors.gray}`}
+                  >
+                    {categoryName}
+                  </span>
+                </div>
+              ) : (
+                <>
               {/* Item name and status badge */}
               <div className="flex items-center gap-2 mb-3">
                 <h3 className="font-semibold text-gray-900">{item.name}</h3>
@@ -141,6 +198,8 @@ export default function SearchResults({
                 <span className="font-semibold">Storage Requirement:</span>{" "}
                 {storageLabel}
               </p>
+                </>
+              )}
             </div>
           </button>
         );

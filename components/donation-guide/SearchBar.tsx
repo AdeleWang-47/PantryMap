@@ -15,6 +15,8 @@ import {
 } from "@/components/donation-guide/types/foods";
 import SearchResults from "./SearchResults";
 import { X } from "lucide-react";
+import { DonationIcon } from "@/components/donation-guide/icons";
+import CategoryDetailModal from "./CategoryDetailModal";
 
 interface SearchBarProps {
   foodsData: FoodsData;
@@ -33,6 +35,10 @@ export default function SearchBar({
 }: SearchBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<SearchableItem | null>(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<SubCategory | null>(null);
+  const [selectedCategoryColor, setSelectedCategoryColor] = useState<
+    "green" | "yellow" | "red"
+  >("green");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -47,18 +53,61 @@ export default function SearchBar({
   };
 
   const filteredResults = useMemo(() => {
-    if (!searchQuery.trim()) {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
       return [];
     }
 
-    const query = searchQuery.toLowerCase().trim();
-    return foodsData.searchableItems.filter((item) =>
+    const allMatches = foodsData.searchableItems.filter((item) =>
       item.name.toLowerCase().includes(query)
     );
+
+    const hasSpecificEndsWithWordMatch = allMatches.some((item) => {
+      const normalizedName = item.name.toLowerCase();
+      return (
+        normalizedName.includes(" ") && normalizedName.endsWith(` ${query}`)
+      );
+    });
+
+    const getMatchTier = (normalizedName: string) => {
+      if (normalizedName.startsWith(query)) return 0; // prefix
+      const words = normalizedName.split(/[\s/-]+/).filter(Boolean);
+      if (words.includes(query)) return 1; // full word
+      return 2; // substring fallback
+    };
+
+    return allMatches.sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      const aTier = getMatchTier(aName);
+      const bTier = getMatchTier(bName);
+      if (aTier !== bTier) return aTier - bTier;
+
+      // Keep specific "... meat" entries above generic "Meat".
+      if (hasSpecificEndsWithWordMatch) {
+        const aIsGenericExact = aName === query && !aName.includes(" ");
+        const bIsGenericExact = bName === query && !bName.includes(" ");
+        if (aIsGenericExact !== bIsGenericExact) {
+          return aIsGenericExact ? 1 : -1;
+        }
+      }
+
+      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    });
   }, [searchQuery, foodsData.searchableItems]);
 
   const handleResultSelect = (item: SearchableItem) => {
     setSelectedItem(item);
+    const subcategory = getSubcategory(item);
+    const categoryColor = getCategoryColor(item.categoryId);
+    if (
+      item.name === item.parentItem &&
+      subcategory &&
+      (categoryColor === "green" || categoryColor === "yellow" || categoryColor === "red")
+    ) {
+      setSelectedSubcategory(subcategory);
+      setSelectedCategoryColor(categoryColor);
+    }
     setIsClosing(true);
     setSearchQuery(item.name);
     onResultClick?.(item.categoryId);
@@ -216,36 +265,56 @@ export default function SearchBar({
               const color = getCategoryColor(selectedItem.categoryId);
               const categoryName = getCategoryName(selectedItem.categoryId);
               const subcategory = getSubcategory(selectedItem);
+              const isCategoryResult = selectedItem.name === selectedItem.parentItem;
               const firstConsideration = getFirstConsideration(subcategory?.considerations || "");
               const storageLabel = getStorageLabel(subcategory?.storage || "none");
               return (
                 <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="font-semibold text-gray-900">{selectedItem.name}</h3>
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded ${categoryBadgeColors[color as keyof typeof categoryBadgeColors] || categoryBadgeColors.gray}`}
-                    >
-                      {categoryName}
-                    </span>
-                  </div>
-                  <ul className="text-sm text-gray-700 space-y-1">
-                    {firstConsideration && (
-                      <li className="flex items-start gap-2">
-                        <span className="text-gray-500 mt-0.5">•</span>
-                        <span>
-                          <span className="font-semibold">Consideration:</span>{" "}
-                          {firstConsideration}
-                        </span>
-                      </li>
-                    )}
-                    <li className="flex items-start gap-2">
-                      <span className="text-gray-500 mt-0.5">•</span>
-                      <span>
-                        <span className="font-semibold">Storage Requirement:</span>{" "}
-                        {storageLabel}
+                  {isCategoryResult ? (
+                    <div className="flex items-center gap-2">
+                      <DonationIcon
+                        iconKey={subcategory?.icon || "pantry"}
+                        className="h-4 w-4 text-gray-700 shrink-0"
+                      />
+                      <h3 className="font-semibold text-gray-900 text-sm leading-5">
+                        {selectedItem.name}
+                      </h3>
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded ${categoryBadgeColors[color as keyof typeof categoryBadgeColors] || categoryBadgeColors.gray}`}
+                      >
+                        {categoryName}
                       </span>
-                    </li>
-                  </ul>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h3 className="font-semibold text-gray-900">{selectedItem.name}</h3>
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded ${categoryBadgeColors[color as keyof typeof categoryBadgeColors] || categoryBadgeColors.gray}`}
+                        >
+                          {categoryName}
+                        </span>
+                      </div>
+                      <ul className="text-sm text-gray-700 space-y-1">
+                        {firstConsideration && (
+                          <li className="flex items-start gap-2">
+                            <span className="text-gray-500 mt-0.5">•</span>
+                            <span>
+                              <span className="font-semibold">Consideration:</span>{" "}
+                              {firstConsideration}
+                            </span>
+                          </li>
+                        )}
+                        <li className="flex items-start gap-2">
+                          <span className="text-gray-500 mt-0.5">•</span>
+                          <span>
+                            <span className="font-semibold">Storage Requirement:</span>{" "}
+                            {storageLabel}
+                          </span>
+                        </li>
+                      </ul>
+                    </>
+                  )}
                 </div>
               );
             })()}
@@ -267,6 +336,11 @@ export default function SearchBar({
           </div>
         )}
       </div>
+      <CategoryDetailModal
+        subcategory={selectedSubcategory}
+        categoryColor={selectedCategoryColor}
+        onClose={() => setSelectedSubcategory(null)}
+      />
     </div>
   );
 }
