@@ -11,7 +11,8 @@
           "icon": "pantry",
           "examples": ["Canned beans", "Canned soup", "Canned vegetables", "Canned fruit"],
           "considerations": "Avoid donating cans that are rusty or dented",
-          "storage": "pantry"
+          "storage": "pantry",
+          "storageRequirement": "Pantry"
         },
         {
           "id": "dry-pantry-staples",
@@ -19,7 +20,8 @@
           "icon": "pantry",
           "examples": ["Dry pasta", "Bagged rice", "Oatmeal", "Cereal", "Flour", "Sugar"],
           "considerations": "Original, unopened packaging",
-          "storage": "pantry"
+          "storage": "pantry",
+          "storageRequirement": "Pantry"
         },
         {
           "id": "produce",
@@ -27,7 +29,8 @@
           "icon": "produce",
           "examples": ["Apples", "Bananas", "Carrots", "Lettuce", "Tomatoes", "Potatoes"],
           "considerations": "Fruits & vegetables from the store or garden",
-          "storage": "Fridge"
+          "storage": "fridge",
+          "storageRequirement": "Fridge"
         },
         {
           "id": "bread-baked",
@@ -35,7 +38,8 @@
           "icon": "bread",
           "examples": ["Bread", "Muffins", "Cookies"],
           "considerations": "Original, unopened packaging",
-          "storage": "Store according to label"
+          "storage": "pantry",
+          "storageRequirement": "Store according to label"
         },
         {
           "id": "homemade-baked",
@@ -43,7 +47,8 @@
           "icon": "cookie",
           "examples": ["Muffins", "Cookies", "Cakes", "Pies"],
           "considerations": "Donate individually packaged items and label with the name of the item, date prepared, and ingredients",
-          "storage": "Pantry or fridge"
+          "storage": "pantry",
+          "storageRequirement": "Pantry or fridge"
         },
         {
           "id": "frozen-produce",
@@ -51,7 +56,8 @@
           "icon": "frozen",
           "examples": ["Frozen peas", "Frozen berries"],
           "considerations": "Original, unopened packaging, and maintained at proper temperatures (< 41°F)",
-          "storage": "Freezer"
+          "storage": "freezer",
+          "storageRequirement": "Freezer"
         },
         {
           "id": "prepared-meals",
@@ -59,7 +65,8 @@
           "icon": "meals",
           "examples": ["Refrigerated meals", "Soups", "Sandwiches", "Salads"],
           "considerations": "Original, unopened packaging, and maintained at proper temperatures (< 41°F)",
-          "storage": "fridge"
+          "storage": "fridge",
+          "storageRequirement": "Fridge"
         },
         {
           "id": "donor-kitchen",
@@ -67,7 +74,8 @@
           "icon": "pot",
           "examples": ["Refrigerated meals", "Soups", "Sandwiches", "Salads"],
           "considerations": "Meals should be maintained at proper temperatures (< 41°F), individually packaged, and labeled with the name of the item, date prepared, location prepared, and ingredients",
-          "storage": "fridge"
+          "storage": "fridge",
+          "storageRequirement": "Fridge"
         },
         {
           "id": "baby-food",
@@ -75,7 +83,8 @@
           "icon": "baby",
           "examples": ["Baby food", "Infant formula"],
           "considerations": "Infant formula must NOT be expired",
-          "storage": "Store according to label"
+          "storage": "pantry",
+          "storageRequirement": "Store according to label"
         },
         {
           "id": "pet-food",
@@ -83,7 +92,8 @@
           "icon": "pet",
           "examples": ["Dog food", "Cat food"],
           "considerations": "Original, unopened packaging",
-          "storage": "pantry"
+          "storage": "pantry",
+          "storageRequirement": "Pantry"
         }
       ]
     },
@@ -98,7 +108,8 @@
           "icon": "dairy",
           "examples": ["Milk", "Cheese", "Yogurt", "Eggs"],
           "considerations": "Original, unopened packaging, and maintained at proper temperatures (< 41°F)",
-          "storage": "fridge"
+          "storage": "fridge",
+          "storageRequirement": "Fridge"
         },
         {
           "id": "deli-meat",
@@ -106,7 +117,8 @@
           "icon": "deli-meat",
           "examples": ["Sliced turkey", "Ham", "Salami"],
           "considerations": "Original, unopened packaging, and maintained at proper temperatures (< 41°F)",
-          "storage": "fridge"
+          "storage": "fridge",
+          "storageRequirement": "Fridge"
         },
         {
           "id": "raw-meat",
@@ -114,7 +126,8 @@
           "icon": "meat",
           "examples": ["Chicken", "Beef", "Pork"],
           "considerations": "Original, unopened packaging, and maintained at proper temperatures (< 41°F). Some sites may require raw meat to be frozen",
-          "storage": "Fridge or freezer"
+          "storage": "fridge",
+          "storageRequirement": "Fridge or freezer"
         },
         {
           "id": "shellfish",
@@ -122,7 +135,8 @@
           "icon": "shellfish",
           "examples": ["Shrimp", "Crab", "Lobster"],
           "considerations": "Original, unopened packaging, and maintained at proper temperatures (< 41°F)",
-          "storage": "Fridge or freezer"
+          "storage": "fridge",
+          "storageRequirement": "Fridge or freezer"
         },
         {
           "id": "hygiene-items",
@@ -130,7 +144,8 @@
           "icon": "hygiene",
           "examples": ["Diapers", "Tampons", "Pads"],
           "considerations": "Original, unopened packaging. Note: Some sites only accept food items",
-          "storage": "pantry"
+          "storage": "pantry",
+          "storageRequirement": "Pantry"
         }
       ]
     },

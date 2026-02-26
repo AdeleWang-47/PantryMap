@@ -32,7 +32,10 @@ export default function CategoryDetailModal({
     none: "N/A",
   };
 
-  const storageLabel = storageLabels[subcategory.storage] || storageLabels.none;
+  const displayStorage =
+    (subcategory as SubCategory & { storageRequirement?: string }).storageRequirement ??
+    storageLabels[subcategory.storage] ??
+    "N/A";
 
   return (
     <Modal
@@ -101,7 +104,7 @@ export default function CategoryDetailModal({
           <h3 className="font-semibold text-gray-900 mb-2">
             Storage Requirement:
           </h3>
-          <p className="text-gray-700">{storageLabel}</p>
+          <p className="text-gray-700">{displayStorage}</p>
         </div>
       </div>
     </Modal>

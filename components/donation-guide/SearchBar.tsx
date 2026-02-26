@@ -100,8 +100,9 @@ export default function SearchBar({
     setSelectedItem(item);
     const subcategory = getSubcategory(item);
     const categoryColor = getCategoryColor(item.categoryId);
+    const isCategory = isCategorySearchResult(item, subcategory);
     if (
-      item.name === item.parentItem &&
+      isCategory &&
       subcategory &&
       (categoryColor === "green" || categoryColor === "yellow" || categoryColor === "red")
     ) {
@@ -148,6 +149,19 @@ export default function SearchBar({
     return category.subcategories.find((sub) => sub.title === item.parentItem) || null;
   };
 
+  const isCategorySearchResult = (
+    item: SearchableItem,
+    subcategory: SubCategory | null
+  ): boolean => {
+    if (!subcategory || !item.parentItem) return false;
+    const normalizedName = item.name.trim().toLowerCase();
+    const normalizedParent = item.parentItem.trim().toLowerCase();
+    return (
+      normalizedName === normalizedParent ||
+      normalizedName.startsWith(`${normalizedParent} (`)
+    );
+  };
+
   const getFirstConsideration = (considerations: string): string => {
     if (!considerations) return "";
     const firstSentence = considerations.split(/[.!?]+/)[0].trim();
@@ -155,13 +169,28 @@ export default function SearchBar({
   };
 
   const getStorageLabel = (storage: string): string => {
+    const normalizedStorage = storage.toLowerCase();
     const storageMap: { [key: string]: string } = {
       pantry: "Pantry",
-      fridge: "Refrigerator",
+      fridge: "Fridge",
       freezer: "Freezer",
       none: "N/A",
     };
-    return storageMap[storage] || "N/A";
+    return storageMap[normalizedStorage] || storage || "N/A";
+  };
+
+  const reopenCategoryModal = (item: SearchableItem) => {
+    const subcategory = getSubcategory(item);
+    const categoryColor = getCategoryColor(item.categoryId);
+    const isCategory = isCategorySearchResult(item, subcategory);
+    if (
+      isCategory &&
+      subcategory &&
+      (categoryColor === "green" || categoryColor === "yellow" || categoryColor === "red")
+    ) {
+      setSelectedSubcategory(subcategory);
+      setSelectedCategoryColor(categoryColor);
+    }
   };
 
   useEffect(() => {
@@ -265,13 +294,24 @@ export default function SearchBar({
               const color = getCategoryColor(selectedItem.categoryId);
               const categoryName = getCategoryName(selectedItem.categoryId);
               const subcategory = getSubcategory(selectedItem);
-              const isCategoryResult = selectedItem.name === selectedItem.parentItem;
+              const isCategory = isCategorySearchResult(selectedItem, subcategory);
               const firstConsideration = getFirstConsideration(subcategory?.considerations || "");
               const storageLabel = getStorageLabel(subcategory?.storage || "none");
               return (
                 <div>
-                  {isCategoryResult ? (
-                    <div className="flex items-center gap-2">
+                  {isCategory ? (
+                    <button
+                      type="button"
+                      className="w-full text-left flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 rounded"
+                      onClick={() => reopenCategoryModal(selectedItem)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          reopenCategoryModal(selectedItem);
+                        }
+                      }}
+                      aria-label={`Open details for ${selectedItem.name}`}
+                    >
                       <DonationIcon
                         iconKey={subcategory?.icon || "pantry"}
                         className="h-4 w-4 text-gray-700 shrink-0"
@@ -284,7 +324,7 @@ export default function SearchBar({
                       >
                         {categoryName}
                       </span>
-                    </div>
+                    </button>
                   ) : (
                     <>
                       <div className="flex items-center gap-2 mb-3">

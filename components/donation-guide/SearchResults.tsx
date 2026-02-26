@@ -52,13 +52,14 @@ export default function SearchResults({
   };
 
   const getStorageLabel = (storage: string): string => {
+    const normalizedStorage = storage.toLowerCase();
     const storageMap: { [key: string]: string } = {
       pantry: "Pantry",
-      fridge: "Refrigerator",
+      fridge: "Fridge",
       freezer: "Freezer",
       none: "N/A",
     };
-    return storageMap[storage] || "N/A";
+    return storageMap[normalizedStorage] || storage || "N/A";
   };
 
   const borderColors = {
