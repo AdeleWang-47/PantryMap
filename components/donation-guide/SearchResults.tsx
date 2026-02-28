@@ -6,12 +6,17 @@ import {
   SubCategory,
 } from "@/components/donation-guide/types/foods";
 import { DonationIcon } from "@/components/donation-guide/icons";
+import {
+  getCheckWithSiteConsiderationBullets,
+  isCheckWithSiteCategory,
+} from "@/components/donation-guide/checkWithSiteConsiderations";
 
 interface SearchResultsProps {
   results: SearchableItem[];
   foodsData: FoodsData;
   onSelect: (item: SearchableItem) => void;
   isClosing?: boolean;
+  showCheckWithSiteDisclaimer?: boolean;
 }
 
 export default function SearchResults({
@@ -19,6 +24,7 @@ export default function SearchResults({
   foodsData,
   onSelect,
   isClosing = false,
+  showCheckWithSiteDisclaimer = false,
 }: SearchResultsProps) {
   const getCategoryColor = (categoryId: string) => {
     const category = foodsData.categories.find((cat) => cat.id === categoryId);
@@ -127,6 +133,13 @@ export default function SearchResults({
         const considerationParts = getConsiderationParts(considerations);
         const storage = subcategory?.storage || "none";
         const storageLabel = getStorageLabel(storage);
+        const isCheckWithSiteItem =
+          showCheckWithSiteDisclaimer && isCheckWithSiteCategory(item.categoryId);
+        const checkWithSiteBullets = getCheckWithSiteConsiderationBullets({
+          considerations,
+          subcategoryId: subcategory?.id,
+          subcategoryTitle: subcategory?.title,
+        });
 
         return (
           <button
@@ -179,21 +192,34 @@ export default function SearchResults({
                 </span>
               </div>
 
-              {considerationParts.length === 1 && (
-                <p className="text-sm text-gray-700 mb-1">
-                  <span className="font-semibold">Consideration:</span>{" "}
-                  {considerationParts[0]}
-                </p>
-              )}
-              {considerationParts.length > 1 && (
-                <div className="text-sm text-gray-700 space-y-1 mb-1">
-                  {considerationParts.map((line, idx) => (
-                    <p key={idx}>
-                      <span className="font-semibold">Consideration:</span>{" "}
-                      {line}
-                    </p>
-                  ))}
+              {isCheckWithSiteItem ? (
+                <div className="text-sm text-gray-700 mb-1 space-y-1">
+                  <p>Considerations:</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {checkWithSiteBullets.map((bullet) => (
+                      <li key={bullet}>{bullet}</li>
+                    ))}
+                  </ul>
                 </div>
+              ) : (
+                <>
+                  {considerationParts.length === 1 && (
+                    <p className="text-sm text-gray-700 mb-1">
+                      <span className="font-semibold">Consideration:</span>{" "}
+                      {considerationParts[0]}
+                    </p>
+                  )}
+                  {considerationParts.length > 1 && (
+                    <div className="text-sm text-gray-700 space-y-1 mb-1">
+                      {considerationParts.map((line, idx) => (
+                        <p key={idx}>
+                          <span className="font-semibold">Consideration:</span>{" "}
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
               <p className="text-sm text-gray-700">
                 <span className="font-semibold">Storage Requirement:</span>{" "}

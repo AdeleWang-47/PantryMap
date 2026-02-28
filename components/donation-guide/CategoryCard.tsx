@@ -7,9 +7,13 @@ import CategoryDetailModal from "./CategoryDetailModal";
 
 interface CategoryCardProps {
   category: Category;
+  showCheckWithSiteDisclaimer?: boolean;
 }
 
-export default function CategoryCard({ category }: CategoryCardProps) {
+export default function CategoryCard({
+  category,
+  showCheckWithSiteDisclaimer = false,
+}: CategoryCardProps) {
   const [selectedSubcategory, setSelectedSubcategory] = useState<typeof category.subcategories[0] | null>(null);
 
   const bgColors = {
@@ -30,22 +34,10 @@ export default function CategoryCard({ category }: CategoryCardProps) {
     red: "text-red-800",
   };
 
-  const hoverBgColors = {
-    green: "hover:bg-green-100/60",
-    yellow: "hover:bg-yellow-100/60",
-    red: "hover:bg-red-100/60",
-  };
-
-  const hoverBorderColors = {
-    green: "hover:border-green-700 hover:ring-1 hover:ring-green-500/30",
-    yellow: "hover:border-yellow-700 hover:ring-1 hover:ring-yellow-500/30",
-    red: "hover:border-red-700 hover:ring-1 hover:ring-red-500/30",
-  };
-
   return (
     <>
       <div
-        className={`${bgColors[category.color]} border-2 ${borderColors[category.color]} ${hoverBgColors[category.color]} ${hoverBorderColors[category.color]} rounded-lg p-6 transition-colors duration-120 cursor-pointer`}
+        className={`${bgColors[category.color]} border-2 ${borderColors[category.color]} rounded-lg p-6`}
       >
         {/* Category Title */}
         <h2 className={`text-2xl font-bold mb-6 text-center ${titleColors[category.color]}`}>
@@ -68,7 +60,9 @@ export default function CategoryCard({ category }: CategoryCardProps) {
       {/* Detail Modal */}
       <CategoryDetailModal
         subcategory={selectedSubcategory}
+        categoryId={category.id}
         categoryColor={category.color}
+        showCheckWithSiteDisclaimer={showCheckWithSiteDisclaimer}
         onClose={() => setSelectedSubcategory(null)}
       />
     </>

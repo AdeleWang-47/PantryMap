@@ -6,8 +6,8 @@ type AboutUsPageProps = {
 };
 
 export default async function AboutUsPage({ searchParams }: AboutUsPageProps) {
-  const params = await searchParams;
-  const initialTab = params?.tab === "action" ? "action" : "about";
+  await searchParams;
+  const initialTab = "about";
 
   return (
     <Suspense fallback={<div>Loading...</div>}>

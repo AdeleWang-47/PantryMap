@@ -7,7 +7,13 @@ import { ChevronLeft } from "lucide-react";
 const UPDATE_ENDPOINT = "/api/submit";
 
 type FormState = {
-  type: "" | "Update" | "Report Issue";
+  type:
+    | ""
+    | "Add a pantry"
+    | "Remove a pantry"
+    | "Report an issue"
+    | "Update pantry information"
+    | "Other";
   pantry_name: string;
   pantry_address: string;
   issue_detail: string;
@@ -23,7 +29,7 @@ type FieldErrors = {
 export default function UpdatePage() {
   const router = useRouter();
   const [formState, setFormState] = useState<FormState>({
-    type: "Update",
+    type: "",
     pantry_name: "",
     pantry_address: "",
     issue_detail: "",
@@ -101,7 +107,7 @@ export default function UpdatePage() {
       }
       setStatus("success");
       setFormState({
-        type: "Update",
+        type: "",
         pantry_name: "",
         pantry_address: "",
         issue_detail: "",
@@ -124,23 +130,23 @@ export default function UpdatePage() {
       <div className="mx-auto w-full max-w-6xl px-6 pt-8">
         <button
           type="button"
-          onClick={() => router.push("/about-us?tab=action")}
+          onClick={() => router.push("/about-us")}
           className="mb-4 inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-full text-emerald-700 transition hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-2"
-          aria-label="Back to Take Action"
+          aria-label="Back to About Us"
         >
           <ChevronLeft className="h-8 w-8" strokeWidth={2.5} />
         </button>
       </div>
       <main className="mx-auto w-full max-w-3xl px-6 pb-8">
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h1 className="text-3xl font-semibold text-neutral-900">Update</h1>
+          <h1 className="text-3xl font-semibold text-neutral-900">Update & Report Issue</h1>
           <p className="mt-3 text-lg leading-relaxed text-neutral-900">
             Report an issue or suggest an update to a micro-pantry listing.
           </p>
 
         <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
           <label className="flex flex-col gap-2 text-base font-medium text-neutral-900">
-            Type
+            Select a type
             <select
               className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm transition hover:border-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-2"
               value={formState.type}
@@ -149,8 +155,11 @@ export default function UpdatePage() {
               }
             >
               <option value="">Select a type</option>
-              <option value="Update">Update</option>
-              <option value="Report Issue">Report Issue</option>
+              <option value="Add a pantry">Add a pantry</option>
+              <option value="Remove a pantry">Remove a pantry</option>
+              <option value="Report an issue">Report an issue</option>
+              <option value="Update pantry information">Update pantry information</option>
+              <option value="Other">Other</option>
             </select>
             {fieldErrors.type ? (
               <span className="mt-2 block text-xs text-rose-600">

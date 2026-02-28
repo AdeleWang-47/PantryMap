@@ -17,6 +17,10 @@ import SearchResults from "./SearchResults";
 import { X } from "lucide-react";
 import { DonationIcon } from "@/components/donation-guide/icons";
 import CategoryDetailModal from "./CategoryDetailModal";
+import {
+  getCheckWithSiteConsiderationBullets,
+  isCheckWithSiteCategory,
+} from "@/components/donation-guide/checkWithSiteConsiderations";
 
 interface SearchBarProps {
   foodsData: FoodsData;
@@ -24,6 +28,7 @@ interface SearchBarProps {
   emphasizeInput?: boolean;
   helperText?: string;
   helperContent?: ReactNode;
+  showCheckWithSiteDisclaimer?: boolean;
 }
 
 export default function SearchBar({
@@ -32,10 +37,12 @@ export default function SearchBar({
   emphasizeInput = false,
   helperText,
   helperContent,
+  showCheckWithSiteDisclaimer = false,
 }: SearchBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<SearchableItem | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<SubCategory | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedCategoryColor, setSelectedCategoryColor] = useState<
     "green" | "yellow" | "red"
   >("green");
@@ -107,6 +114,7 @@ export default function SearchBar({
       (categoryColor === "green" || categoryColor === "yellow" || categoryColor === "red")
     ) {
       setSelectedSubcategory(subcategory);
+      setSelectedCategoryId(item.categoryId);
       setSelectedCategoryColor(categoryColor);
     }
     setIsClosing(true);
@@ -189,6 +197,7 @@ export default function SearchBar({
       (categoryColor === "green" || categoryColor === "yellow" || categoryColor === "red")
     ) {
       setSelectedSubcategory(subcategory);
+      setSelectedCategoryId(item.categoryId);
       setSelectedCategoryColor(categoryColor);
     }
   };
@@ -219,7 +228,6 @@ export default function SearchBar({
     red: "bg-red-600 text-white",
     gray: "bg-gray-600 text-white",
   };
-
   return (
     <div ref={containerRef} className="relative w-full">
       <form onSubmit={handleSubmit} className="w-full">
@@ -296,7 +304,16 @@ export default function SearchBar({
               const subcategory = getSubcategory(selectedItem);
               const isCategory = isCategorySearchResult(selectedItem, subcategory);
               const firstConsideration = getFirstConsideration(subcategory?.considerations || "");
+              const fullConsideration = subcategory?.considerations || "";
               const storageLabel = getStorageLabel(subcategory?.storage || "none");
+              const isCheckWithSiteItem =
+                showCheckWithSiteDisclaimer &&
+                isCheckWithSiteCategory(selectedItem.categoryId);
+              const checkWithSiteBullets = getCheckWithSiteConsiderationBullets({
+                considerations: fullConsideration,
+                subcategoryId: subcategory?.id,
+                subcategoryTitle: subcategory?.title,
+              });
               return (
                 <div>
                   {isCategory ? (
@@ -335,24 +352,39 @@ export default function SearchBar({
                           {categoryName}
                         </span>
                       </div>
-                      <ul className="text-sm text-gray-700 space-y-1">
-                        {firstConsideration && (
+                      {isCheckWithSiteItem ? (
+                        <div className="text-sm text-gray-700 space-y-1">
+                          <p>Considerations:</p>
+                          <ul className="list-disc pl-5 space-y-1">
+                            {checkWithSiteBullets.map((bullet) => (
+                              <li key={bullet}>{bullet}</li>
+                            ))}
+                          </ul>
+                          <p>
+                            <span className="font-semibold">Storage Requirement:</span>{" "}
+                            {storageLabel}
+                          </p>
+                        </div>
+                      ) : (
+                        <ul className="text-sm text-gray-700 space-y-1">
+                          {firstConsideration && (
+                            <li className="flex items-start gap-2">
+                              <span className="text-gray-500 mt-0.5">•</span>
+                              <span>
+                                <span className="font-semibold">Consideration:</span>{" "}
+                                {firstConsideration}
+                              </span>
+                            </li>
+                          )}
                           <li className="flex items-start gap-2">
                             <span className="text-gray-500 mt-0.5">•</span>
                             <span>
-                              <span className="font-semibold">Consideration:</span>{" "}
-                              {firstConsideration}
+                              <span className="font-semibold">Storage Requirement:</span>{" "}
+                              {storageLabel}
                             </span>
                           </li>
-                        )}
-                        <li className="flex items-start gap-2">
-                          <span className="text-gray-500 mt-0.5">•</span>
-                          <span>
-                            <span className="font-semibold">Storage Requirement:</span>{" "}
-                            {storageLabel}
-                          </span>
-                        </li>
-                      </ul>
+                        </ul>
+                      )}
                     </>
                   )}
                 </div>
@@ -365,6 +397,7 @@ export default function SearchBar({
             foodsData={foodsData}
             onSelect={handleResultSelect}
             isClosing={isClosing}
+            showCheckWithSiteDisclaimer={showCheckWithSiteDisclaimer}
           />
         ) : (
           <div className="h-full">
@@ -378,8 +411,13 @@ export default function SearchBar({
       </div>
       <CategoryDetailModal
         subcategory={selectedSubcategory}
+        categoryId={selectedCategoryId}
         categoryColor={selectedCategoryColor}
-        onClose={() => setSelectedSubcategory(null)}
+        showCheckWithSiteDisclaimer={showCheckWithSiteDisclaimer}
+        onClose={() => {
+          setSelectedSubcategory(null);
+          setSelectedCategoryId(null);
+        }}
       />
     </div>
   );

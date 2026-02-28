@@ -4,16 +4,24 @@ import { SubCategory } from "@/components/donation-guide/types/foods";
 import { X } from "lucide-react";
 import { DonationIcon } from "@/components/donation-guide/icons";
 import Modal from "./Modal";
+import {
+  getCheckWithSiteConsiderationBullets,
+  isCheckWithSiteCategory,
+} from "@/components/donation-guide/checkWithSiteConsiderations";
 
 interface CategoryDetailModalProps {
   subcategory: SubCategory | null;
+  categoryId?: string | null;
   categoryColor: "green" | "yellow" | "red";
+  showCheckWithSiteDisclaimer?: boolean;
   onClose: () => void;
 }
 
 export default function CategoryDetailModal({
   subcategory,
+  categoryId,
   categoryColor,
+  showCheckWithSiteDisclaimer = false,
   onClose,
 }: CategoryDetailModalProps) {
   if (!subcategory) return null;
@@ -36,6 +44,13 @@ export default function CategoryDetailModal({
     (subcategory as SubCategory & { storageRequirement?: string }).storageRequirement ??
     storageLabels[subcategory.storage] ??
     "N/A";
+  const isCheckWithSiteItem =
+    showCheckWithSiteDisclaimer && isCheckWithSiteCategory(categoryId || undefined);
+  const checkWithSiteBullets = getCheckWithSiteConsiderationBullets({
+    considerations: subcategory.considerations,
+    subcategoryId: subcategory.id,
+    subcategoryTitle: subcategory.title,
+  });
 
   return (
     <Modal
@@ -78,24 +93,32 @@ export default function CategoryDetailModal({
         {subcategory.considerations && (
           <div>
             <h3 className="font-semibold text-gray-900 mb-2">Considerations:</h3>
-            {(() => {
-              const text = subcategory.considerations;
-              const noteIndex = text.indexOf("Note:");
-              if (noteIndex === -1) {
-                const single = text.trim();
-                return <p className="text-gray-700">{single}</p>;
-              }
-              const main = text.slice(0, noteIndex).trim().replace(/\.$/, "");
-              const note = text.slice(noteIndex).trim();
-              const lines = [main, note].filter(Boolean);
-              return (
-                <ul className="list-disc list-inside space-y-1 text-gray-700">
-                  {lines.map((line, index) => (
-                    <li key={index}>{line}</li>
-                  ))}
-                </ul>
-              );
-            })()}
+            {isCheckWithSiteItem ? (
+              <ul className="list-disc list-inside space-y-1 text-gray-700">
+                {checkWithSiteBullets.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            ) : (
+              (() => {
+                const text = subcategory.considerations;
+                const noteIndex = text.indexOf("Note:");
+                if (noteIndex === -1) {
+                  const single = text.trim();
+                  return <p className="text-gray-700">{single}</p>;
+                }
+                const main = text.slice(0, noteIndex).trim().replace(/\.$/, "");
+                const note = text.slice(noteIndex).trim();
+                const lines = [main, note].filter(Boolean);
+                return (
+                  <ul className="list-disc list-inside space-y-1 text-gray-700">
+                    {lines.map((line, index) => (
+                      <li key={index}>{line}</li>
+                    ))}
+                  </ul>
+                );
+              })()
+            )}
           </div>
         )}
 

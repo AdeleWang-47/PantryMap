@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 type AboutTabsProps = {
-  active: "about" | "action";
+  active: "about";
 };
 
 export default function AboutTabs({ active }: AboutTabsProps) {
@@ -20,18 +20,6 @@ export default function AboutTabs({ active }: AboutTabsProps) {
           href="/about-us?tab=about"
         >
           About Us
-        </Link>
-      )}
-      {active === "action" ? (
-        <span className="rounded-full bg-zinc-100 px-3 py-1 font-medium text-zinc-900">
-          Take Action
-        </span>
-      ) : (
-        <Link
-          className="rounded-full px-3 py-1 text-zinc-700 hover:text-zinc-900"
-          href="/about-us?tab=action"
-        >
-          Take Action
         </Link>
       )}
     </nav>

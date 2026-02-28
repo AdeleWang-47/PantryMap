@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Modal from "../../components/donation-guide/Modal";
-import { X } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 import SearchBar from "@/components/donation-guide/SearchBar";
 import CategoryCard from "@/components/donation-guide/CategoryCard";
 import foodsDataRaw from "@/components/donation-guide/data/foods.json";
@@ -186,47 +186,38 @@ const faqItems = [
     question: "How should food be safely transported?",
     answer: (
       <p className={faqAnswerParagraphClassName}>
-        Food should be transported in a way that prevents unsafe temperature
-        changes and cross-contamination. Temperature-sensitive foods should be
-        moved quickly in insulated, clean containers, kept sealed when possible,
-        and returned to refrigeration within two hours.
+        Transport temperature-sensitive foods in clean, insulated containers and
+        return to refrigeration within two hours.
       </p>
     ),
   },
   {
     question: "How should food be stored?",
     answer: (
-      <ul className={cardListClassName}>
-        <li>
-          Certain foods, called time/temperature control for safety foods,
-          should only be donated at micropantry sites with a working
-          refrigerator.
-        </li>
-        <li>
-          Temperature-sensitive foods include items such as meats, poultry,
-          fish, eggs, dairy products, tofu, all cooked vegetables (including
-          cooked beans, rice, and potatoes), seed sprouts, sliced melons, garlic
-          and other fresh herbs in oil mixtures. It is important to keep these
-          foods at safe temperatures (at 41°F or below) to prevent bacteria from
-          growing.
-        </li>
-        <li>
+      <div className="space-y-2">
+        <p className={faqAnswerParagraphClassName}>
+          Temperature-sensitive foods should only be donated at micropantry
+          sites with a working refrigerator.
+        </p>
+        <p className={faqAnswerParagraphClassName}>
           To prevent cross-contamination, store raw meat and eggs on the bottom
           shelf of the fridge and separate them from ready-to-eat foods.
-        </li>
-      </ul>
+        </p>
+      </div>
     ),
   },
 ];
 
 export default function FoodDonationGuideLandingPage() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
-  const [showAllResources, setShowAllResources] = useState(false);
-  const [showAllFaqs, setShowAllFaqs] = useState(false);
+  const [openFaqQuestions, setOpenFaqQuestions] = useState<Set<string>>(
+    new Set()
+  );
   const heroButtonClassName =
-    "rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-neutral-900 shadow-sm transition-colors hover:border-emerald-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-2";
+    "rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-neutral-900 shadow-sm cursor-pointer [transition:background-color_150ms_ease,border-color_150ms_ease,color_150ms_ease] hover:border-emerald-300 hover:bg-emerald-100 active:border-emerald-400 active:bg-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600";
   const cardBaseClassName =
     "rounded-2xl border border-gray-200 bg-white p-6 shadow-sm";
+  const faqCardClassName = "rounded-2xl border border-gray-100 bg-white p-5";
   const guidanceCardClassName =
     "rounded-2xl border border-sky-200 bg-sky-50 p-6 shadow-sm";
   const guidanceLabelClassName = "text-base font-semibold text-black";
@@ -295,6 +286,17 @@ export default function FoodDonationGuideLandingPage() {
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+  };
+  const toggleFaqQuestion = (question: string) => {
+    setOpenFaqQuestions((prev) => {
+      const next = new Set(prev);
+      if (next.has(question)) {
+        next.delete(question);
+      } else {
+        next.add(question);
+      }
+      return next;
+    });
   };
   const handleResultClick = (_categoryId: string) => {};
 
@@ -476,6 +478,7 @@ export default function FoodDonationGuideLandingPage() {
             foodsData={foodsData}
             onResultClick={handleResultClick}
             emphasizeInput
+            showCheckWithSiteDisclaimer
           />
         </div>
         <p className="mt-2 text-base font-normal text-slate-900">
@@ -485,80 +488,127 @@ export default function FoodDonationGuideLandingPage() {
         <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
           {foodsData.categories.map((category) => (
             <div key={category.id}>
-              <CategoryCard category={category} />
+              <CategoryCard
+                category={category}
+                showCheckWithSiteDisclaimer
+              />
             </div>
           ))}
+        </div>
+      </section>
+
+      <section id="food-safety-essentials" className="mt-10 scroll-mt-24">
+        <h2 className="text-2xl font-semibold text-black">Food Safety Essentials</h2>
+        <div className="mt-4 grid gap-6 md:grid-cols-3">
+          <div className={guidanceCardClassName}>
+            <h3 className="text-lg font-semibold text-black mt-0 mb-4">
+              Temperature Control
+            </h3>
+            <p className="text-sm text-black leading-6">
+              Donated foods that require temperature control must remain at 41˚F or below. When refrigerated transport is available, foods should be kept below 41˚F during transport to the venue. If refrigerated transport is not available, the food items should be labeled “Process Immediately” and must not be out of temperature controls for more than two (2) hours.
+            </p>
+            <div className="mt-4 flex justify-center">
+              <div className="overflow-hidden rounded-xl border-0 bg-transparent shadow-none outline-none">
+                <img
+                  src="/food-safety-temperature-control.png"
+                  alt="Temperature control guidance graphic"
+                  className="h-auto w-full max-w-[130px] rounded-xl border-0 bg-transparent object-contain shadow-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className={guidanceCardClassName}>
+            <h3 className="text-lg font-semibold text-black mt-0 mb-4">
+              Protection from Contamination
+            </h3>
+            <p className="text-sm text-black leading-6">
+              Food must be protected from potential contamination. Enhanced sanitary practices, food-grade containers, and protocols ensuring that transport vehicles are clean. Canned goods must be from a commercial source (with intact label) and in good condition. Punctured, bulging, swollen, or seriously damaged cans/packaging should not be donated.
+            </p>
+          </div>
+
+          <div className={guidanceCardClassName}>
+            <h3 className="text-lg font-semibold text-black mt-0 mb-4">Verify your donation</h3>
+            <p className="text-sm text-black leading-6">
+              Use the item look-up tool above to make sure that the food you want to donate is acceptable. Your local micro-pantry or community fridge may also provide their own donation guidelines to ensure food safety at their sites. Please follow any site-specific policies when donating.
+            </p>
+          </div>
         </div>
       </section>
 
       <section id="faq" className="mt-10 scroll-mt-24">
         <h2 className="text-2xl font-semibold text-neutral-900">FAQ</h2>
         <div className="mt-4 space-y-3">
-          {(showAllFaqs ? faqItems : faqItems.slice(0, 3)).map((faq) => (
-            <details key={faq.question} className={cardBaseClassName}>
-              <summary className="cursor-pointer text-base font-semibold text-black">
-                {faq.question}
-              </summary>
-              <div className="mt-2 w-full max-w-none whitespace-normal text-sm text-black leading-6">
-                {faq.answer}
-              </div>
-            </details>
+          {faqItems.map((faq, index) => (
+            <div key={faq.question} className={faqCardClassName}>
+              <button
+                type="button"
+                onClick={() => toggleFaqQuestion(faq.question)}
+                className="flex w-full items-center justify-between gap-3 text-left cursor-pointer text-base font-semibold text-black"
+                aria-expanded={openFaqQuestions.has(faq.question)}
+                aria-controls={`faq-answer-${index}`}
+              >
+                <span>{faq.question}</span>
+                {openFaqQuestions.has(faq.question) ? (
+                  <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                )}
+              </button>
+              {openFaqQuestions.has(faq.question) && (
+                <div
+                  id={`faq-answer-${index}`}
+                  className="mt-2 w-full max-w-none whitespace-normal text-sm text-black leading-6"
+                >
+                  {faq.answer}
+                </div>
+              )}
+            </div>
           ))}
         </div>
-        {faqItems.length > 3 && (
-          <button
-            type="button"
-            onClick={() => setShowAllFaqs((prev) => !prev)}
-            className="mt-4 flex w-full items-center justify-center gap-2 text-sm font-medium text-black hover:underline underline-offset-2"
-            aria-expanded={showAllFaqs}
-          >
-            {showAllFaqs ? "Show fewer FAQs" : "Show all FAQs"}
-            <span aria-hidden="true">{showAllFaqs ? "▲" : "▼"}</span>
-          </button>
-        )}
       </section>
 
-      <section id="resources" className="mt-10 scroll-mt-24">
+      <section id="resources" className="resourcesSection mt-10 scroll-mt-24">
         <h2 className="text-2xl font-semibold text-black">Resources</h2>
         <p className="max-w-2xl text-sm text-black">
           Official guidelines and reference documents used in this guide (opens
           in a new tab).
         </p>
         <div className={`${cardBaseClassName} mt-4`}>
-          <ul className={cardListClassName}>
-            {(showAllResources ? resources : resources.slice(0, 4)).map(
-              (resource) => (
-                <li key={resource.href}>
-                  <a
-                    href={resource.href}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="font-semibold text-black hover:underline underline-offset-2"
-                  >
-                    {resource.title}
-                  </a>
-                  <p className="mt-1 text-sm text-black">
-                    {resource.description}
-                  </p>
-                </li>
-              )
-            )}
+          <ul className={`${cardListClassName} resourcesList`}>
+            {resources.map((resource) => (
+              <li key={resource.href}>
+                <a
+                  href={resource.href}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="resourceTitleLink resourceTitle font-semibold"
+                >
+                  {resource.title}
+                  <span className="resourceExternalIcon" aria-hidden="true">
+                    ↗
+                  </span>
+                </a>
+                <p className="resourceDescription mt-0 text-sm">
+                  {resource.description}
+                </p>
+              </li>
+            ))}
           </ul>
-          <button
-            type="button"
-            onClick={() => setShowAllResources((prev) => !prev)}
-            className="mt-4 flex w-full items-center justify-center gap-2 text-sm font-medium text-black hover:underline underline-offset-2"
-            aria-expanded={showAllResources}
-          >
-            {showAllResources ? "Show fewer resources" : "Show all resources"}
-            <span aria-hidden="true">
-              {showAllResources ? "▲" : "▼"}
-            </span>
-          </button>
         </div>
       </section>
 
     </main>
+      <style jsx>{`
+        .resourcesSection .resourcesList > li + li {
+          margin-top: 0.375rem;
+        }
+
+        .resourcesSection .resourceExternalIcon {
+          margin-left: 0.15em;
+          font-size: 0.75em;
+        }
+      `}</style>
       {guideModal}
     </>
   );
