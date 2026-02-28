@@ -194,7 +194,9 @@ export default function SearchResults({
 
               {isCheckWithSiteItem ? (
                 <div className="text-sm text-gray-700 mb-1 space-y-1">
-                  <p>Considerations:</p>
+                  <p>
+                    <span className="font-semibold">Considerations:</span>
+                  </p>
                   <ul className="list-disc pl-5 space-y-1">
                     {checkWithSiteBullets.map((bullet) => (
                       <li key={bullet}>{bullet}</li>
