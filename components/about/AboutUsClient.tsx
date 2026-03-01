@@ -332,7 +332,7 @@ export default function AboutUsClient({ initialTab }: AboutUsClientProps) {
                         Find a pantry near you through the LIVE MAP
                       </li>
                       <li>
-                        Click on a pantry, and check if someone donated recently, or the pantry has medium to high stock level Note that pantries with the{" "}
+                        Click on a pantry, and check if someone donated recently, or the pantry has medium to high stock level. Note that pantries with the{" "}
                         <WifiBadgeIcon /> symbol will automatically update the stock level when someone donate!
                       </li>
                       <li>
