@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
+    "dev:local": "next dev --webpack -H 127.0.0.1 -p 3000",
     "dev:turbopack": "next dev",
     "dev:map": "python3 -m http.server 8080 --directory PantryMap/frontend",
+    "dev:backend": "cd PantryMap/functions-backend && npm run build && npm start",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

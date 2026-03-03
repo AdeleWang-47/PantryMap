@@ -313,6 +313,32 @@
   }
 
   function derivePantryType(p = {}) {
+    // New classification based primarily on Cosmos "detail":
+    // - detail === "Shared Pantry"      → shelf‑stable micropantry (yellow pins)
+    // - detail === "Pantry + Fridge"   → community fridge (blue pins)
+    const detail = trimString(p.detail);
+    if (detail === 'Shared Pantry') return 'shelf';
+    if (detail === 'Pantry + Fridge') return 'fridge';
+
+    // If Cosmos "detail" is null/empty, fall back to the "refrigerated" field.
+    // If it contains "fridge" → blue category (fridge); otherwise → yellow category (shelf).
+    if (!detail) {
+      const r = p.refrigerated;
+      if (Array.isArray(r)) {
+        const hasFridge = r.some((v) => /fridge/i.test(String(v || '')));
+        return hasFridge ? 'fridge' : 'shelf';
+      }
+      if (typeof r === 'string') {
+        return /fridge/i.test(r) ? 'fridge' : 'shelf';
+      }
+      if (typeof r === 'boolean') {
+        return r ? 'fridge' : 'shelf';
+      }
+      if (typeof r === 'number') {
+        return r ? 'fridge' : 'shelf';
+      }
+    }
+
     const raw = p.refrigerated ?? p.pantryType ?? p.type ?? p.pantry_type ?? '';
     const normalizeString = (value) => String(value).trim().toLowerCase();
 
@@ -482,6 +508,8 @@
       status,
       address,
       pantryType,
+      // Keep raw "detail" because we now use it for pantry category rules.
+      detail: p.detail ?? null,
       description: p.description || p.about || p.detail || '',
       acceptedFoodTypes: Array.isArray(p.acceptedFoodTypes) ? p.acceptedFoodTypes : [],
       hours: p.hours && typeof p.hours === 'object' ? p.hours : {},
@@ -720,6 +748,27 @@
       blobUrl: data?.blobUrl,
       expiresOn: data?.expiresOn,
     };
+  };
+
+  API.uploadDonationPhoto = async function uploadDonationPhoto(pantryId, file) {
+    const { backend: backendId } = resolvePantryId(pantryId);
+    if (!backendId) throw new Error('Pantry id is required');
+    if (!file || typeof file.name !== 'string' || typeof file.type !== 'string') {
+      throw new Error('A file with name and type is required');
+    }
+
+    const form = new FormData();
+    form.append('pantryId', backendId);
+    form.append('file', file, file.name);
+
+    const res = await fetch(`${API_BASE_URL}/uploads/donations/upload`, { method: 'POST', body: form });
+    if (!res.ok) {
+      let detail = '';
+      try { detail = await res.text(); } catch (_) {}
+      throw new Error(detail || `Upload failed (${res.status})`);
+    }
+    const data = await res.json();
+    return { blobUrl: data?.blobUrl };
   };
 
   API.getDonationReadSas = async function getDonationReadSas(blobUrl) {
@@ -1238,6 +1287,32 @@
   }
 
   function derivePantryType(p = {}) {
+    // New classification based primarily on Cosmos "detail":
+    // - detail === "Shared Pantry"      → shelf‑stable micropantry (yellow pins)
+    // - detail === "Pantry + Fridge"   → community fridge (blue pins)
+    const detail = trimString(p.detail);
+    if (detail === 'Shared Pantry') return 'shelf';
+    if (detail === 'Pantry + Fridge') return 'fridge';
+
+    // If Cosmos "detail" is null/empty, fall back to the "refrigerated" field.
+    // If it contains "fridge" → blue category (fridge); otherwise → yellow category (shelf).
+    if (!detail) {
+      const r = p.refrigerated;
+      if (Array.isArray(r)) {
+        const hasFridge = r.some((v) => /fridge/i.test(String(v || '')));
+        return hasFridge ? 'fridge' : 'shelf';
+      }
+      if (typeof r === 'string') {
+        return /fridge/i.test(r) ? 'fridge' : 'shelf';
+      }
+      if (typeof r === 'boolean') {
+        return r ? 'fridge' : 'shelf';
+      }
+      if (typeof r === 'number') {
+        return r ? 'fridge' : 'shelf';
+      }
+    }
+
     const raw = p.refrigerated ?? p.pantryType ?? p.type ?? p.pantry_type ?? '';
     const normalizeString = (value) => String(value).trim().toLowerCase();
 
@@ -1635,6 +1710,27 @@
       blobUrl: data?.blobUrl,
       expiresOn: data?.expiresOn,
     };
+  };
+
+  API.uploadDonationPhoto = async function uploadDonationPhoto(pantryId, file) {
+    const { backend: backendId } = resolvePantryId(pantryId);
+    if (!backendId) throw new Error('Pantry id is required');
+    if (!file || typeof file.name !== 'string' || typeof file.type !== 'string') {
+      throw new Error('A file with name and type is required');
+    }
+
+    const form = new FormData();
+    form.append('pantryId', backendId);
+    form.append('file', file, file.name);
+
+    const res = await fetch(`${API_BASE_URL}/uploads/donations/upload`, { method: 'POST', body: form });
+    if (!res.ok) {
+      let detail = '';
+      try { detail = await res.text(); } catch (_) {}
+      throw new Error(detail || `Upload failed (${res.status})`);
+    }
+    const data = await res.json();
+    return { blobUrl: data?.blobUrl };
   };
 
   API.getDonationReadSas = async function getDonationReadSas(blobUrl) {

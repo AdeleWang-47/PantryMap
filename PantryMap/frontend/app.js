@@ -83,14 +83,14 @@
     
     if (forceLevel) {
       // Use forced level from donation data
-      statusLevel = forceLevel;
+      statusLevel = forceLevel === 'inactive' ? 'unknown' : forceLevel;
       if (forceLevel === 'high') {
-        statusLabel = 'Full';
+        statusLabel = 'High';
         ratio = 1.0; // 100% filled for high
       } else if (forceLevel === 'medium') {
         statusLabel = 'Medium';
         ratio = 0.66; // 66% filled for medium
-      } else if (forceLevel === 'inactive') {
+      } else if (forceLevel === 'inactive' || forceLevel === 'unknown') {
         statusLabel = 'Unknown';
         ratio = 0.0; // No fill for inactive
       } else {
@@ -101,7 +101,7 @@
       // Calculate from ratio
       if (ratio >= 0.75) {
         statusLevel = 'high';
-        statusLabel = 'Full';
+        statusLabel = 'High';
       } else if (ratio >= 0.4) {
         statusLevel = 'medium';
         statusLabel = 'Medium';
@@ -120,7 +120,8 @@
       'low': '#ef4444',      // Red
       'medium': '#f59e0b',   // Yellow/Orange
       'high': '#52b788',     // Green
-      'inactive': '#94a3b8' // Gray for lack of data
+      'unknown': '#94a3b8',  // Gray for lack of data
+      'inactive': '#94a3b8'  // Back-compat
     };
     const strokeColor = colorMap[statusLevel] || '#52b788';
     const textColor = strokeColor;
@@ -137,6 +138,211 @@
         </div>
       </div>
     `;
+  }
+
+  function parseTimestampMs(value) {
+    if (!value) return null;
+    const t = new Date(value).getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+
+  function stockLabelFromLevel(level) {
+    const l = String(level || '').toLowerCase().trim();
+    if (l === 'high') return 'High';
+    if (l === 'medium') return 'Medium';
+    if (l === 'low') return 'Low';
+    return 'Unknown';
+  }
+
+  function stockDescriptionFromLabel(label) {
+    if (label === 'Low') return 'Only a few items reported in the pantry.';
+    if (label === 'Medium') return 'About a bag of items reported in the pantry';
+    if (label === 'High') return 'More than a bag of items reported in the pantry.';
+    return 'No stock level updates reported in the past 48 hours';
+  }
+
+  function formatPoundsFromKg(weightKg) {
+    const n = Number(weightKg);
+    if (!Number.isFinite(n)) return null;
+    return Math.round(n * 2.2046226218);
+  }
+
+  function getStockInfoHelpText() {
+    return [
+      'Stock levels:',
+      'Unknown = when either sensors are not working, no sensors are installed, or no donations were reported in the last 24h',
+      'Low',
+      'Medium',
+      'High',
+    ].join('\n');
+  }
+
+  function renderStockCardInnerHtml(model = {}) {
+    const rawLevel = model.level || 'unknown';
+    const level = rawLevel === 'inactive' ? 'unknown' : rawLevel;
+    const label = stockLabelFromLevel(level);
+    const description = stockDescriptionFromLabel(label);
+
+    const lastUpdateIso = model.lastUpdateIso || null;
+    const lastUpdateSource = model.lastUpdateSource || null; // 'sensor' | 'self'
+    const noUpdateAvailable = model.noUpdateAvailable === true || !lastUpdateIso;
+
+    const lastUpdateLine = formatLastUpdateRelative(noUpdateAvailable ? null : lastUpdateIso);
+
+    const pounds = (lastUpdateSource === 'sensor' && !noUpdateAvailable)
+      ? formatPoundsFromKg(model.sensorWeightKg)
+      : null;
+    const poundsLine = pounds != null ? `${pounds} lb of items detected` : '';
+
+    return `
+      <div class="stock-card-head">
+        <div class="stock-card-head-text">
+          <h2>Stock level</h2>
+          <div class="stock-card-desc">${description}</div>
+        </div>
+        <button class="stock-info-btn" type="button" aria-label="Stock level info" data-stock-info title="Stock level info">i</button>
+      </div>
+      ${renderStockGauge(0, 40, level)}
+      <div class="stock-meta">
+        <div class="stock-meta-line">${lastUpdateLine}</div>
+        ${poundsLine ? `<div class="stock-meta-line">${poundsLine}</div>` : ''}
+      </div>
+    `;
+  }
+
+  /**
+   * Normalize stock information for a pantry using the same priority as the detail view:
+   * 1) Sensor (API telemetry/latest or local fallback within 24h)
+   * 2) Self‑reported donations within 24h
+   * If neither provides a usable weight, stock level is treated as Unknown.
+   * Result is written back onto the pantry object so list + detail can share it.
+   */
+  async function hydratePantryStock(pantry) {
+    if (!pantry || !pantry.id || !window.PantryAPI) return null;
+    if (pantry._stockHydrated) {
+      return {
+        level: pantry.stockLevelCls || 'unknown',
+        lastUpdateIso: pantry.stockLevelUpdatedAt || null,
+        lastUpdateSource: pantry.stockLevelSource || null,
+        sensorWeightKg: pantry.stockLevelSource === 'sensor' ? pantry.stockLevelWeightKg : null,
+      };
+    }
+
+    const canTelemetry = typeof window.PantryAPI.getTelemetryLatest === 'function';
+    const canDonations = typeof window.PantryAPI.getDonationBasedStock === 'function';
+
+    const [telemetryRes, donationRes] = await Promise.allSettled([
+      canTelemetry ? window.PantryAPI.getTelemetryLatest(pantry.id) : Promise.resolve(null),
+      canDonations ? window.PantryAPI.getDonationBasedStock(pantry.id) : Promise.resolve(null),
+    ]);
+
+    const telemetry = telemetryRes.status === 'fulfilled' ? telemetryRes.value : null;
+    const donationStock = donationRes.status === 'fulfilled' ? donationRes.value : null;
+
+    const telemetrySource = telemetry?.source || null;
+    const sensorish = telemetrySource === 'sensor' || telemetrySource === 'fallback_local';
+    const sensorWeightKgRaw = sensorish ? (telemetry?.weightKg ?? telemetry?.weight) : null;
+    const sensorWeightKg = sensorWeightKgRaw != null ? Number(sensorWeightKgRaw) : null;
+    const sensorUpdatedAt = sensorish ? (telemetry?.updatedAt ?? telemetry?.timestamp ?? null) : null;
+
+    const donationWeightKgRaw = donationStock?.weightKg ?? donationStock?.weight ?? null;
+    const donationWeightKg = donationWeightKgRaw != null ? Number(donationWeightKgRaw) : null;
+    const donationUpdatedAt = donationStock?.updatedAt ?? donationStock?.timestamp ?? null;
+
+    const sensorMs = parseTimestampMs(sensorUpdatedAt);
+    const donationMs = parseTimestampMs(donationUpdatedAt);
+
+    let lastUpdateIso = null;
+    let lastUpdateSource = null;
+    const hasUsableSensor =
+      sensorish &&
+      sensorWeightKg != null &&
+      typeof window.PantryAPI.isWeightInReasonableRange === 'function' &&
+      window.PantryAPI.isWeightInReasonableRange(sensorWeightKg);
+    if (hasUsableSensor) {
+      lastUpdateIso = sensorUpdatedAt;
+      lastUpdateSource = 'sensor';
+    } else if (donationMs != null) {
+      lastUpdateIso = donationUpdatedAt;
+      lastUpdateSource = 'self';
+    } else if (sensorMs != null) {
+      lastUpdateIso = sensorUpdatedAt;
+      lastUpdateSource = 'sensor';
+    }
+
+    let weightForLevelKg = null;
+    if (hasUsableSensor) {
+      weightForLevelKg = sensorWeightKg;
+    } else if (donationWeightKg != null && window.PantryAPI.isWeightInReasonableRange(donationWeightKg)) {
+      weightForLevelKg = donationWeightKg;
+    }
+
+    let level = 'unknown';
+    if (weightForLevelKg != null && typeof window.PantryAPI.computeStockLevelFromWeight === 'function') {
+      const badge = window.PantryAPI.computeStockLevelFromWeight(weightForLevelKg);
+      if (badge?.level) level = badge.level;
+      pantry.stockLevel = badge.label || stockLabelFromLevel(badge.level);
+      pantry.stockLevelCls = badge.cls || badge.level || 'unknown';
+      pantry.stockLevelWeightKg = weightForLevelKg;
+      pantry.stockLevelUpdatedAt = lastUpdateIso || null;
+      pantry.stockLevelSource = lastUpdateSource || null;
+    } else {
+      pantry.stockLevel = stockLabelFromLevel('unknown');
+      pantry.stockLevelCls = 'unknown';
+      pantry.stockLevelWeightKg = null;
+      pantry.stockLevelUpdatedAt = lastUpdateIso || null;
+      pantry.stockLevelSource = lastUpdateSource || null;
+    }
+
+    pantry._stockHydrated = true;
+
+    return {
+      level: pantry.stockLevelCls || level || 'unknown',
+      lastUpdateIso,
+      lastUpdateSource,
+      sensorWeightKg: lastUpdateSource === 'sensor' ? sensorWeightKg : null,
+    };
+  }
+
+  async function updateStockCardForPantry(pantry) {
+    if (!pantry || !pantry.id) return;
+    const stockSection = document.querySelector('.stock-section .stock-card');
+    if (!stockSection || !window.PantryAPI) return;
+
+    const stockModel = await hydratePantryStock(pantry);
+    const level = stockModel?.level || pantry.stockLevelCls || 'unknown';
+    const lastUpdateIso = stockModel?.lastUpdateIso || pantry.stockLevelUpdatedAt || null;
+    const lastUpdateSource = stockModel?.lastUpdateSource || pantry.stockLevelSource || null;
+    const sensorWeightKg = stockModel?.sensorWeightKg || null;
+
+    stockSection.innerHTML = renderStockCardInnerHtml({
+      level,
+      lastUpdateIso,
+      lastUpdateSource,
+      sensorWeightKg: lastUpdateSource === 'sensor' ? sensorWeightKg : null,
+      noUpdateAvailable: !lastUpdateIso,
+    });
+
+    // Also update the corresponding list card (if visible) so summary matches detail.
+    try {
+      const listItem = document.querySelector(`.list-item[data-id="${pantry.id}"]`);
+      if (listItem) {
+        const stockSpan = listItem.querySelector('.stock');
+        const restockSpan = listItem.querySelector('.restock');
+        if (stockSpan) {
+          const badge = getStockBadge(pantry);
+          stockSpan.textContent = badge.label || 'Unknown';
+          stockSpan.classList.remove('low', 'medium', 'high', 'unknown');
+          if (badge.cls) stockSpan.classList.add(badge.cls);
+        }
+        if (restockSpan) {
+          const text = formatLastUpdateRelative(pantry.stockLevelUpdatedAt || null);
+          restockSpan.textContent = text;
+        }
+      }
+    } catch (_) {
+      // Non-fatal: UI will still show correct detail card even if list update fails.
+    }
   }
 
   function formatDateTimeMinutes(isoString) {
@@ -276,9 +482,14 @@
       div.className = 'map-legend';
       div.innerHTML = `
         <div class="map-legend-title">Legend</div>
-        <div class="map-legend-item"><span class="map-legend-pin" style="background:#3b82f6"></span> Fridge</div>
-        <div class="map-legend-item"><span class="map-legend-pin" style="background:#f59e0b"></span> Shelf</div>
-        <div class="map-legend-item"><span class="map-legend-pin" style="background:#52b788"></span> Shelf & Fridge</div>
+        <div class="map-legend-item">
+          <span class="map-legend-pin" style="background:#3b82f6"></span>
+          Community fridge
+        </div>
+        <div class="map-legend-item">
+          <span class="map-legend-pin" style="background:#f59e0b"></span>
+          Shelf-stable micropantry
+        </div>
       `;
       return div;
     };
@@ -335,10 +546,12 @@
         return isUncategorized || pantryType === listControlsState.type;
       });
     }
-    // Compute stock level for sorting
+
+    // For initial render, keep sorting lightweight using existing inventory counts,
+    // then hydrate stock info in the background and update each list row in-place.
     const withStock = inView.map(p => ({
       p,
-      stock: (p.inventory && Array.isArray(p.inventory.categories)) ? p.inventory.categories.reduce((s, c) => s + (c.quantity || 0), 0) : 0,
+      stock: getTotalStock(p),
       updated: p.sensors && p.sensors.updatedAt ? new Date(p.sensors.updatedAt).getTime() : 0,
     }));
     // Stock sorting
@@ -355,6 +568,32 @@
     detailsContent.innerHTML = renderPantryList(inView);
     attachImageFallbacks(detailsContent);
     updateCollapseButton(false);
+    
+    // Kick off background hydration so list summary matches detail view once telemetry/donations load.
+    inView.slice(0, 50).forEach(pantry => {
+      hydratePantryStock(pantry)
+        .then(() => {
+          try {
+            const listItem = document.querySelector(`.list-item[data-id="${pantry.id}"]`);
+            if (!listItem) return;
+            const stockSpan = listItem.querySelector('.stock');
+            const restockSpan = listItem.querySelector('.restock');
+            if (stockSpan) {
+              const badge = getStockBadge(pantry);
+              stockSpan.textContent = badge.label || 'Unknown';
+              stockSpan.classList.remove('low', 'medium', 'high', 'unknown');
+              if (badge.cls) stockSpan.classList.add(badge.cls);
+            }
+            if (restockSpan) {
+              const text = formatLastUpdateRelative(pantry.stockLevelUpdatedAt || null);
+              restockSpan.textContent = text;
+            }
+          } catch (_) {
+            // Non-fatal; ignore DOM update failures.
+          }
+        })
+        .catch(() => {});
+    });
     
     // Update map markers based on type filter
     updateMapMarkerVisibility();
@@ -374,8 +613,8 @@
           <span>Type</span>
           <select id="listType">
             <option value="all" ${listControlsState.type==='all'?'selected':''}>All</option>
-            <option value="fridge" ${listControlsState.type==='fridge'?'selected':''}>Fridge</option>
-            <option value="shelf" ${listControlsState.type==='shelf'?'selected':''}>Shelf</option>
+            <option value="fridge" ${listControlsState.type==='fridge'?'selected':''}>Community fridge</option>
+            <option value="shelf" ${listControlsState.type==='shelf'?'selected':''}>Shelf-stable micropantry</option>
           </select>
         </label>
         <label>
@@ -401,35 +640,82 @@
   }
 
   function getTotalStock(pantry) {
+    // Legacy inventory-based heuristic: sum of category quantities.
     return (pantry.inventory && Array.isArray(pantry.inventory.categories))
       ? pantry.inventory.categories.reduce((s, c) => s + (c.quantity || 0), 0)
       : 0;
   }
 
-  function getStockBadge(total) {
-    if (total <= 10) return { label: 'Low Stock', cls: 'low' };
-    if (total <= 30) return { label: 'Medium Stock', cls: 'medium' };
-    return { label: 'In Stock', cls: 'high' };
+  function getStockBadge(pantry) {
+    // 1) If PantryAPI already normalized a stock level for this pantry, reuse it as‑is.
+    if (pantry.stockLevel && pantry.stockLevelCls) {
+      return { label: pantry.stockLevel, cls: pantry.stockLevelCls };
+    }
+
+    // 2) Otherwise, try to derive from a weight signal (sensor / donations).
+    const rawWeight =
+      pantry.stockLevelWeightKg != null ? pantry.stockLevelWeightKg
+        : (pantry.sensors && pantry.sensors.weightKg != null ? pantry.sensors.weightKg : null);
+
+    const weight = rawWeight != null && !Number.isNaN(Number(rawWeight)) ? Number(rawWeight) : null;
+
+    if (
+      weight != null &&
+      window.PantryAPI &&
+      typeof window.PantryAPI.computeStockLevelFromWeight === 'function'
+    ) {
+      const badge = window.PantryAPI.computeStockLevelFromWeight(weight);
+      if (badge && badge.label && badge.cls) {
+        return { label: badge.label, cls: badge.cls };
+      }
+      // Weight exists but PantryAPI rejected it as out‑of‑range → treat as Unknown, not "Low".
+      return { label: 'Unknown', cls: 'unknown' };
+    }
+
+    // 3) Final fallback: use inventory‑based heuristic only when we truly have no weight info.
+    const totalItems = getTotalStock(pantry);
+    if (totalItems > 0) {
+      if (totalItems <= 10) return { label: 'Low Stock', cls: 'low' };
+      if (totalItems <= 30) return { label: 'Medium Stock', cls: 'medium' };
+      return { label: 'In Stock', cls: 'high' };
+    }
+
+    // No signals at all.
+    return { label: 'Unknown', cls: 'unknown' };
   }
 
-  function formatRelativeDays(iso) {
-    if (!iso) return 'Unknown';
+  function formatLastUpdateRelative(iso) {
+    if (!iso) return 'No update available';
     const t = new Date(iso).getTime();
-    if (!t) return 'Unknown';
-    const diff = Math.max(0, Date.now() - t);
-    const days = Math.floor(diff / (24*60*60*1000));
-    if (days === 0) return 'Restocked within 1 day';
-    if (days === 1) return 'Restocked 1 day ago';
-    return `Restocked ${days} days ago`;
+    if (!Number.isFinite(t)) return 'No update available';
+    const diffMs = Math.max(0, Date.now() - t);
+    const minutes = Math.floor(diffMs / (60 * 1000));
+    if (minutes < 1) return 'Last update: <1 minute ago';
+    if (minutes < 60) return `Last update: ${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Last update: ${hours} hour${hours === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hours / 24);
+    return `Last update: ${days} day${days === 1 ? '' : 's'} ago`;
   }
 
   function renderListItem(p) {
     const title = p.name || 'Untitled Pantry';
     const addrLine = (p.address || '').trim();
     const photo = (p.photos && p.photos[0]) || null;
-    const total = getTotalStock(p);
-    const stock = getStockBadge(total);
-    const restock = formatRelativeDays(p.sensors && p.sensors.updatedAt);
+
+    // Prefer normalized stock info from PantryAPI so summary matches detail view.
+    const badge = getStockBadge(p);
+
+    // Only show "Last update: …" when we actually have a meaningful stock reading.
+    // If level is Unknown, treat it as "No update available" even if there is a generic updatedAt timestamp.
+    let lastUpdateIso = null;
+    if (badge.label && badge.label !== 'Unknown') {
+      lastUpdateIso =
+        p.stockLevelUpdatedAt ||
+        (p.sensors && p.sensors.updatedAt) ||
+        null;
+    }
+    const restock = formatLastUpdateRelative(lastUpdateIso);
     return `
       <button class="list-card list-item" data-id="${p.id}">
         <div class="thumb">${contentPhotoTag(photo, 72, title)}</div>
@@ -439,7 +725,7 @@
           </div>
           <div class="list-address">${addrLine}</div>
           <div class="list-meta">
-            <span class="stock ${stock.cls}">${stock.label}</span>
+            <span class="stock ${badge.cls || ''}">${badge.label || 'Unknown'}</span>
             <span class="dot">•</span>
             <span class="restock">${restock}</span>
           </div>
@@ -470,44 +756,37 @@
 
   function getMarkerIcon(pantry, isSelected) {
     const pantryType = (pantry.pantryType || '').toLowerCase();
-    const typeColors = { 'shelf': '#f59e0b', 'fridge': '#3b82f6', 'shelf+fridge': '#52b788' };
-    const typeColorsDark = { 'shelf': '#b45309', 'fridge': '#1d4ed8', 'shelf+fridge': '#2d6a4f' };
+    // Two visual categories only:
+    // - "shelf"        → Shelf-stable micropantry (yellow)
+    // - "fridge"       → Community fridge (blue)
+    // - "shelf+fridge" → treat as community fridge (blue)
+    const typeColors = { shelf: '#f59e0b', fridge: '#3b82f6', 'shelf+fridge': '#3b82f6' };
+    const typeColorsDark = { shelf: '#b45309', fridge: '#1d4ed8', 'shelf+fridge': '#1d4ed8' };
     const color = typeColors[pantryType] || '#f59e0b';
     const colorDark = typeColorsDark[pantryType] || '#b45309';
     const selectedColor = isSelected ? colorDark : color;
-    if (isSelected) {
-      return L.divIcon({
-        className: 'pantry-marker pantry-marker-selected',
-        html: `<div style="
-          width: 40px; height: 40px;
-          border: 4px solid ${selectedColor};
-          background: white;
-          border-radius: 50%;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-          display: flex; align-items: center; justify-content: center;
-          cursor: pointer; transition: transform 0.2s;
-        " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-          <div style="width: 16px; height: 16px; background: ${selectedColor}; border-radius: 50%;"></div>
-        </div>`,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20]
-      });
-    }
-    return L.divIcon({
-      className: 'pantry-marker',
-      html: `<div style="
-        width: 32px; height: 32px;
-        background: ${color};
-        border: 3px solid white;
-        border-radius: 50%;
-        box-shadow: 0 3px 8px rgba(0,0,0,0.25);
-        display: flex; align-items: center; justify-content: center;
-        cursor: pointer; transition: transform 0.2s;
-      " onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
-        <div style="width: 12px; height: 12px; background: white; border-radius: 50%;"></div>
-      </div>`,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16]
+    const svg = (() => {
+      const ringStroke = selectedColor;
+      const shadowOpacity = isSelected ? 0.42 : 0.32;
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
+          <defs>
+            <filter id="ds" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="rgba(15,23,42,${shadowOpacity})"/>
+            </filter>
+          </defs>
+          <path filter="url(#ds)" d="M16 41s12-11.1 12-23C28 11.4 22.6 6 16 6S4 11.4 4 18c0 11.9 12 23 12 23z" fill="${ringStroke}"/>
+          <circle cx="16" cy="18" r="7.5" fill="#ffffff" stroke="${ringStroke}" stroke-width="5"/>
+        </svg>
+      `.trim();
+    })();
+
+    const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+    return L.icon({
+      iconUrl,
+      iconSize: [32, 42],
+      iconAnchor: [16, 41],
+      className: isSelected ? 'pantry-marker pantry-marker-selected' : 'pantry-marker'
     });
   }
 
@@ -523,59 +802,7 @@
 
   /** Refresh stock section from telemetry (sensor or donations). Call after posting a donation so the badge updates. */
   function refreshStockSectionForPantry(pantry) {
-    if (!pantry || !pantry.id || !window.PantryAPI) return;
-    const stockSection = document.querySelector('.stock-section .stock-card');
-    if (!stockSection) return;
-    function showUnavailable() {
-      stockSection.innerHTML = `
-        <div class="stock-card-head">
-          <h2>Stock level</h2>
-          <span class="stock-source-badge stock-source-badge-inactive">Sensor data unavailable. No reported stock in the last 24h.</span>
-        </div>
-        ${renderStockGauge(0, 40, 'inactive')}
-      `;
-    }
-    function applyStock(weightKg, source) {
-      if (weightKg == null || !window.PantryAPI.isWeightInReasonableRange(weightKg)) return false;
-      const badge = window.PantryAPI.computeStockLevelFromWeight(weightKg);
-      if (!badge) return false;
-      const sourceLabel = source === 'donations' ? 'Estimated from donations' : 'From sensor';
-      stockSection.innerHTML = `
-        <div class="stock-card-head">
-          <h2>Stock level</h2>
-          <span class="stock-source-badge">${sourceLabel} · ${Number(weightKg).toFixed(1)} kg</span>
-        </div>
-        ${renderStockGauge(0, 40, badge.level)}
-      `;
-      return true;
-    }
-    function tryTelemetryThenDonations() {
-      if (typeof window.PantryAPI.getTelemetryLatest !== 'function') {
-        tryDonationStock();
-        return;
-      }
-      window.PantryAPI.getTelemetryLatest(pantry.id).then(function (telemetry) {
-        if (telemetry) {
-          const weightKg = telemetry.weight != null ? Number(telemetry.weight) : (telemetry.weightKg != null ? Number(telemetry.weightKg) : null);
-          const source = telemetry.source || 'sensor';
-          if (applyStock(weightKg, source)) return;
-        }
-        tryDonationStock();
-      }).catch(function () {
-        tryDonationStock();
-      });
-    }
-    function tryDonationStock() {
-      if (typeof window.PantryAPI.getDonationBasedStock !== 'function') {
-        showUnavailable();
-        return;
-      }
-      window.PantryAPI.getDonationBasedStock(pantry.id).then(function (donationStock) {
-        if (donationStock && donationStock.weightKg != null && applyStock(donationStock.weightKg, donationStock.source || 'donations')) return;
-        showUnavailable();
-      }).catch(showUnavailable);
-    }
-    tryTelemetryThenDonations();
+    updateStockCardForPantry(pantry).catch(function () {});
   }
 
   // Show pantry details in side panel
@@ -592,75 +819,7 @@
     bindDonorNotesModule(detailsContent, pantry);
     bindWishlistModule(detailsContent, pantry);
     bindMessageModule(detailsContent, pantry);
-    
-    // Fetch latest telemetry (API → pantry_data → donations); update stock with weight and source badge
-    function applyStockFromWeight(weightKg, source) {
-      if (weightKg == null || !window.PantryAPI || !window.PantryAPI.isWeightInReasonableRange(weightKg)) return false;
-      const badge = window.PantryAPI.computeStockLevelFromWeight(weightKg);
-      if (!badge) return false;
-      const stockSection = document.querySelector('.stock-section .stock-card');
-      if (!stockSection) return false;
-      const sourceLabel = source === 'donations' ? 'Estimated from donations' : 'From sensor';
-      stockSection.innerHTML = `
-        <div class="stock-card-head">
-          <h2>Stock level</h2>
-          <span class="stock-source-badge">${sourceLabel} · ${Number(weightKg).toFixed(1)} kg</span>
-        </div>
-        ${renderStockGauge(0, 40, badge.level)}
-      `;
-      return true;
-    }
-    if (window.PantryAPI && pantry && pantry.id) {
-      const pid = pantry.id;
-      var stockSection = document.querySelector('.stock-section .stock-card');
-      function showStockUnavailable() {
-        if (!stockSection) return;
-        stockSection.innerHTML = `
-          <div class="stock-card-head">
-            <h2>Stock level</h2>
-            <span class="stock-source-badge stock-source-badge-inactive">Sensor data unavailable. No reported stock in the last 24h.</span>
-          </div>
-          ${renderStockGauge(0, 40, 'inactive')}
-        `;
-      }
-      if (typeof window.PantryAPI.getTelemetryLatest === 'function') {
-        window.PantryAPI.getTelemetryLatest(pid).then(function (telemetry) {
-          if (telemetry) {
-            const weightKg = telemetry.weight != null ? Number(telemetry.weight) : (telemetry.weightKg != null ? Number(telemetry.weightKg) : null);
-            const source = telemetry.source || 'sensor';
-            if (applyStockFromWeight(weightKg, source)) return;
-          }
-          // Explicit fallback: try donation-based stock (in case telemetry fallback order skipped it)
-          if (typeof window.PantryAPI.getDonationBasedStock === 'function') {
-            return window.PantryAPI.getDonationBasedStock(pid).then(function (donationStock) {
-              if (donationStock && donationStock.weightKg != null && applyStockFromWeight(donationStock.weightKg, donationStock.source || 'donations')) return;
-              return loadStockFromPantryDataJson(pid).then(function (w) {
-                if (!applyStockFromWeight(w, 'fallback_local')) showStockUnavailable();
-              });
-            });
-          }
-          return loadStockFromPantryDataJson(pid).then(function (w) {
-            if (!applyStockFromWeight(w, 'fallback_local')) showStockUnavailable();
-          });
-        }).catch(function () {
-          if (typeof window.PantryAPI.getDonationBasedStock === 'function') {
-            return window.PantryAPI.getDonationBasedStock(pid).then(function (donationStock) {
-              if (donationStock && donationStock.weightKg != null && applyStockFromWeight(donationStock.weightKg, donationStock.source || 'donations')) return;
-              return loadStockFromPantryDataJson(pid).then(function (w) {
-                if (!applyStockFromWeight(w, 'fallback_local')) showStockUnavailable();
-              });
-            });
-          }
-          return loadStockFromPantryDataJson(pid).then(function (w) {
-            if (!applyStockFromWeight(w, 'fallback_local')) showStockUnavailable();
-          });
-        });
-      } else {
-        loadStockFromPantryDataJson(pid).then(function (w) {
-          if (!applyStockFromWeight(w, 'fallback_local')) showStockUnavailable();
-        });
-      }
-    }
+    refreshStockSectionForPantry(pantry);
     
     // Show details panel
     const detailsPanel = document.getElementById('details');
@@ -693,23 +852,31 @@
     const secondPhotoUrl = photosArr[1] || photosArr[0] || '';
     const totalItems = pantry.inventory?.categories?.reduce((sum, cat) => sum + (cat.quantity || 0), 0) || 0;
     const addressText = pantry.address || 'detail address unknown';
-    const pantryTypeLabel = pantry.pantryType
-      ? pantry.pantryType.charAt(0).toUpperCase() + pantry.pantryType.slice(1)
-      : 'Pantry';
-    
-    // 逻辑：先看 hardware（传感器/重量），没有再用 donation
-    const weightKg = pantry.stockLevelWeightKg != null ? Number(pantry.stockLevelWeightKg) : null;
-    const hasHardware = weightKg != null && window.PantryAPI && typeof window.PantryAPI.isWeightInReasonableRange === 'function' && window.PantryAPI.isWeightInReasonableRange(weightKg);
-    const sensorBadge = hasHardware && typeof window.PantryAPI.computeStockLevelFromWeight === 'function' ? window.PantryAPI.computeStockLevelFromWeight(weightKg) : null;
 
-    let stockHtml;
-    let stockSourceBadge = '';
-    if (sensorBadge) {
-      stockSourceBadge = '<span class="stock-source-badge">From sensor · ' + Number(weightKg).toFixed(1) + ' kg</span>';
-      stockHtml = renderStockGauge(0, 40, sensorBadge.level);
-    } else {
-      stockSourceBadge = '<span class="stock-source-badge stock-source-badge-inactive">Loading...</span>';
-      stockHtml = renderStockGauge(0, 40, 'inactive');
+    // Map normalized pantryType / Cosmos "detail" into two user-facing categories:
+    // - Shared Pantry      → Shelf-stable micropantry (yellow pins)
+    // - Pantry + Fridge    → Community fridge (blue pins)
+    // User-facing category label (two categories only).
+    const typeLower = String(pantry.pantryType || '').toLowerCase();
+    const pantryTypeLabel = typeLower === 'fridge' || typeLower === 'shelf+fridge'
+      ? 'Community fridge'
+      : typeLower === 'shelf'
+        ? 'Shelf-stable micropantry'
+        : 'Pantry';
+    
+    const initialWeightKg = pantry.stockLevelWeightKg != null ? Number(pantry.stockLevelWeightKg) : null;
+    const initialUpdatedAt = pantry.stockLevelUpdatedAt || pantry.sensors?.updatedAt || null;
+    const initialSource = (pantry.stockLevelSource || '').toLowerCase() === 'sensor' ? 'sensor' : 'self';
+    let initialLevel = 'unknown';
+    if (
+      initialWeightKg != null &&
+      window.PantryAPI &&
+      typeof window.PantryAPI.isWeightInReasonableRange === 'function' &&
+      window.PantryAPI.isWeightInReasonableRange(initialWeightKg) &&
+      typeof window.PantryAPI.computeStockLevelFromWeight === 'function'
+    ) {
+      const badge = window.PantryAPI.computeStockLevelFromWeight(initialWeightKg);
+      if (badge?.level) initialLevel = badge.level;
     }
 
     return `
@@ -726,17 +893,19 @@
 
       <section class="detail-section stock-section">
         <div class="stock-card">
-          <div class="stock-card-head">
-            <h2>Stock level</h2>
-            ${stockSourceBadge}
-          </div>
-          ${stockHtml}
+          ${renderStockCardInnerHtml({
+            level: initialUpdatedAt ? initialLevel : 'unknown',
+            lastUpdateIso: initialUpdatedAt,
+            lastUpdateSource: initialSource,
+            sensorWeightKg: initialSource === 'sensor' ? initialWeightKg : null,
+            noUpdateAvailable: !initialUpdatedAt,
+          })}
         </div>
       </section>
 
       <section class="detail-section donor-notes-section">
         <h2>Post a Donation</h2>
-        <button class="donor-notes-cta" type="button" data-donor-note-add>report your new donation</button>
+        <button class="donor-notes-cta" type="button" data-donor-note-add>Report your donation here!</button>
         <div class="donor-notes-latest" data-donor-notes-latest>
           <div class="donor-note-empty">Loading…</div>
         </div>
@@ -770,12 +939,29 @@
     const closeBtn = document.getElementById('closeDetails');
     closeBtn.addEventListener('click', () => {
       const detailsPanel = document.getElementById('details');
-  	    currentPantry = null;
-  	    updateMarkerIcons();
-  	    resetMapToDefaultView();
-  	    detailsPanel.classList.remove('collapsed');
-  	    showListForCurrentView();
-  	    updateCollapseButton(false);
+      if (!detailsPanel) return;
+
+      // If a pantry is selected, arrow acts as "back to list"
+      if (currentPantry) {
+        currentPantry = null;
+        updateMarkerIcons();
+        resetMapToDefaultView();
+        detailsPanel.classList.remove('hidden');
+        detailsPanel.classList.remove('collapsed');
+        showListForCurrentView();
+        updateCollapseButton(false);
+        return;
+      }
+
+      // If already on list view, arrow toggles collapse/expand of the pantry list
+      const isCollapsed = detailsPanel.classList.contains('collapsed');
+      if (isCollapsed) {
+        detailsPanel.classList.remove('collapsed');
+        updateCollapseButton(false);
+      } else {
+        detailsPanel.classList.add('collapsed');
+        updateCollapseButton(true);
+      }
     });
     
     // Status filter
@@ -790,6 +976,12 @@
     const detailsContent = document.getElementById('detailsContent');
     if (detailsContent) {
       detailsContent.addEventListener('click', (e) => {
+        const infoBtn = e.target && e.target.closest ? e.target.closest('[data-stock-info]') : null;
+        if (infoBtn) {
+          e.preventDefault();
+          alert(getStockInfoHelpText());
+          return;
+        }
         const target = e.target.closest('.list-item');
         if (target) {
           e.preventDefault();
@@ -901,9 +1093,9 @@
       return;
     }
     
-    // Find the stock gauge element
-    const stockSection = document.querySelector('.stock-section .stock-card');
-    if (!stockSection) return;
+    // Stock card is driven by unified telemetry/donation resolution.
+    refreshStockSectionForPantry(pantry);
+    return;
     
     // Recent donations within 24 hours (already filtered by caller)
     const recentDonations = donations && donations.length > 0 ? donations : [];
@@ -1053,8 +1245,11 @@
       // Display donation items
       const donationItems = Array.isArray(note.donationItems) ? note.donationItems : [];
       if (donationItems.length > 0) {
-        const itemsText = donationItems.join(', ');
-        inner += `<p class="donor-note-text"><strong>Items:</strong> ${itemsText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+        const chipsHtml = donationItems
+          .map((it) => String(it).replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+          .map((safe) => `<span class="donor-note-chip">${safe}</span>`)
+          .join('');
+        inner += `<div class="donor-note-text donor-note-items"><strong>Items:</strong><div class="donor-note-chips">${chipsHtml}</div></div>`;
       }
       
       // Display message if present
@@ -1090,11 +1285,11 @@
     overlay.innerHTML = `
       <div class="donor-note-modal" role="dialog" aria-modal="true" aria-labelledby="donor-note-modal-title">
         <button type="button" class="donor-note-modal-close" aria-label="Close">×</button>
-        <h3 id="donor-note-modal-title">Report your donation</h3>
-        <p class="donor-note-modal-hint">Please select how much you are donating. All other fields are optional.</p>
+        <h3 id="donor-note-modal-title">Report a donation</h3>
+        <p class="donor-note-modal-hint">Please describe below what you are donating</p>
         <form class="donor-note-form">
           <label>
-            <span>How much are you donating?</span>
+            <span>How much are you donating in total?</span>
             <select name="donationSize" required>
               <option value="">Select size...</option>
               <option value="low_donation">ONE OR FEW ITEMS</option>
@@ -1102,30 +1297,34 @@
               <option value="high_donation">MORE THAN 1 GROCERY BAG</option>
             </select>
           </label>
-          <label>
-            <span>What are you donating?</span>
-            <select name="itemType">
-              <option value="">Select type (optional)...</option>
-              <option value="fresh produce">Fresh produce</option>
-              <option value="cans">Cans</option>
-              <option value="beans">Beans</option>
-              <option value="liquids">Liquids</option>
-              <option value="other">Other</option>
-            </select>
-            <input type="text" name="itemKeywords" class="donor-note-keywords-input" placeholder="Or add keywords (e.g., rice, pasta, vegetables)" />
-          </label>
-          <label class="donor-note-photo-label">
-            <span>Post a photo!</span>
-            <input type="file" name="photo" accept="image/*" />
-          </label>
+          <div class="donor-note-categories-label">
+            <span class="donor-note-categories-title">What are you donating? Select all that apply</span>
+            <div class="donor-note-categories-list">
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Canned & jarred food (canned soup, beans, etc.)"> Canned & jarred food (canned soup, beans, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Dry goods (pasta, rice, etc.)"> Dry goods (pasta, rice, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Fresh food (produce, fruits, etc.)"> Fresh food (produce, fruits, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Cooked & ready-to-eat food (sandwiches, etc.)"> Cooked & ready-to-eat food (sandwiches, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Beverages (bottled water, juice boxes, etc.)"> Beverages (bottled water, juice boxes, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Breakfast & snack food (cereal, granola bars, etc.)"> Breakfast & snack food (cereal, granola bars, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Baby & child items (diapers, baby wipes, etc.)"> Baby & child items (diapers, baby wipes, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Personal hygiene & health items (toothbrushes, pain relievers, etc.)"> Personal hygiene & health items (toothbrushes, pain relievers, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Household essentials (paper towels, laundry detergent, etc.)"> Household essentials (paper towels, laundry detergent, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Clothing items (blankets, socks, etc.)"> Clothing items (blankets, socks, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Other"> Other</label>
+            </div>
+          </div>
           <label>
             <span>Leave a message (optional)</span>
-            <textarea name="message" rows="3" placeholder="Add any additional details about your donation..."></textarea>
+            <textarea name="message" rows="3" placeholder="Leave a message (optional)"></textarea>
+          </label>
+          <label class="donor-note-photo-label">
+            <span>Post a photo (optional)</span>
+            <input type="file" name="photo" accept="image/*" />
           </label>
           <div class="donor-note-modal-error" aria-live="polite"></div>
           <div class="donor-note-modal-actions">
             <button type="button" class="donor-note-modal-cancel">Cancel</button>
-            <button type="submit" class="donor-note-modal-submit">Submit report</button>
+            <button type="submit" class="donor-note-modal-submit">Submit</button>
           </div>
         </form>
       </div>
@@ -1155,31 +1354,20 @@
     const errorEl = overlay.querySelector('.donor-note-modal-error');
     const photoInput = form.querySelector('input[name="photo"]');
     const donationSizeInput = form.querySelector('select[name="donationSize"]');
-    const itemTypeInput = form.querySelector('select[name="itemType"]');
-    const itemKeywordsInput = form.querySelector('input[name="itemKeywords"]');
     const messageInput = form.querySelector('textarea[name="message"]');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorEl.textContent = '';
       const donationSize = (donationSizeInput && donationSizeInput.value) ? String(donationSizeInput.value).trim() : '';
-      const itemType = (itemTypeInput && itemTypeInput.value) ? String(itemTypeInput.value).trim() : '';
-      const itemKeywords = (itemKeywordsInput && itemKeywordsInput.value) ? String(itemKeywordsInput.value).trim() : '';
       const message = (messageInput && messageInput.value) ? String(messageInput.value).trim() : '';
       const file = photoInput && photoInput.files && photoInput.files[0];
+      const checkedCategories = form.querySelectorAll('input[name="donationCategories"]:checked');
+      const donationItems = Array.from(checkedCategories).map(cb => cb.value);
       
       if (!donationSize) {
-        errorEl.textContent = 'Please select how much you are donating.';
+        errorEl.textContent = 'Please select how much you are donating in total.';
         return;
-      }
-
-      // Combine item type and keywords
-      const donationItems = [];
-      if (itemType) donationItems.push(itemType);
-      if (itemKeywords) {
-        // Split keywords by comma or space and add them
-        const keywords = itemKeywords.split(/[,\s]+/).filter(k => k.trim().length > 0);
-        donationItems.push(...keywords);
       }
 
       submitBtn.disabled = true;
@@ -1188,23 +1376,9 @@
       try {
         let photoUrls = [];
         if (file) {
-          const sas = await window.PantryAPI.createDonationUploadSas(pantry.id, file);
-          const uploadUrl = sas?.uploadUrl;
-          const blobUrl = sas?.blobUrl;
-          if (!uploadUrl || !blobUrl) {
-            throw new Error('Could not get upload link.');
-          }
-          const putRes = await fetch(uploadUrl, {
-            method: 'PUT',
-            headers: {
-              'x-ms-blob-type': 'BlockBlob',
-              'Content-Type': file.type
-            },
-            body: file
-          });
-          if (!putRes.ok) {
-            throw new Error('Upload failed. Please try again.');
-          }
+          const uploaded = await window.PantryAPI.uploadDonationPhoto(pantry.id, file);
+          const blobUrl = uploaded?.blobUrl;
+          if (!blobUrl) throw new Error('Upload failed. Please try again.');
           photoUrls = [blobUrl];
         }
         const payload = { 
@@ -1216,8 +1390,7 @@
         console.log('Submitting donation report:', payload);
         await window.PantryAPI.postDonation(pantry.id, payload);
         if (donationSizeInput) donationSizeInput.value = '';
-        if (itemTypeInput) itemTypeInput.value = '';
-        if (itemKeywordsInput) itemKeywordsInput.value = '';
+        form.querySelectorAll('input[name="donationCategories"]').forEach(cb => { cb.checked = false; });
         if (messageInput) messageInput.value = '';
         if (photoInput) photoInput.value = '';
         if (typeof onSuccess === 'function') await onSuccess();
@@ -1339,27 +1512,86 @@
     }
   }
 
+  function computeCirclePack(circles) {
+    const padding = 10;
+    const placed = [];
+    const centerX = 150;
+    const centerY = 150;
+    const sorted = circles.slice().sort((a, b) => b.r - a.r);
+    for (let i = 0; i < sorted.length; i++) {
+      const r = sorted[i].r;
+      let x, y;
+      if (i === 0) {
+        x = centerX;
+        y = centerY;
+      } else {
+        let found = false;
+        for (let t = 0; t < 400 && !found; t++) {
+          const angle = t * 0.55;
+          const dist = 35 + t * 2.2;
+          const tx = centerX + dist * Math.cos(angle);
+          const ty = centerY + dist * Math.sin(angle);
+          let ok = true;
+          for (const p of placed) {
+            const d = Math.hypot(tx - p.x, ty - p.y);
+            if (d < r + p.r + 2) { ok = false; break; }
+          }
+          if (ok) { x = tx; y = ty; found = true; }
+        }
+        if (x == null) { x = centerX + (i % 3) * 45; y = centerY + Math.floor(i / 3) * 45; }
+      }
+      placed.push({ x, y, r });
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of placed) {
+      minX = Math.min(minX, p.x - p.r);
+      minY = Math.min(minY, p.y - p.r);
+      maxX = Math.max(maxX, p.x + p.r);
+      maxY = Math.max(maxY, p.y + p.r);
+    }
+    const width = maxX - minX + padding * 2;
+    const height = maxY - minY + padding * 2;
+    return { placed: placed.map(p => ({ x: p.x - minX + padding, y: p.y - minY + padding, r: p.r })), width, height };
+  }
+
   function renderWishlistItems(grid, items) {
     grid.innerHTML = '';
     if (!Array.isArray(items) || items.length === 0) {
       grid.innerHTML = `<div class="wishlist-empty">No wishlist items in the last 7 days.</div>`;
       return;
     }
-    items.forEach(item => {
-      const qty = Number.isFinite(item.count) && item.count > 0 ? item.count : 1; // Backend aggregates count
-      const timestamp = item.updatedAt || item.createdAt || null; // Prefer freshest timestamp regardless of field name
-      const itemDisplay = String(item.itemDisplay ?? item.id ?? 'Item'); // Use backend agg label
-      const pill = document.createElement('button');
-      pill.type = 'button';
-      pill.className = 'wishlist-chip';
-      pill.title = timestamp ? `Updated ${formatRelativeTimestamp(timestamp)}` : '';
-      pill.textContent = qty > 1 ? `${itemDisplay} × ${qty}` : itemDisplay; // Surface quantity inline when greater than one
-      pill.addEventListener('click', async () => {
+    const circles = items.map(item => {
+      const qty = Number.isFinite(item.count) && item.count > 0 ? item.count : 1;
+      const r = Math.max(28, 16 + Math.min(qty, 12) * 5);
+      return { item, r };
+    });
+    const pack = computeCirclePack(circles);
+    const sortedCircles = circles.slice().sort((a, b) => b.r - a.r);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'wishlist-bubble-pack';
+    const inner = document.createElement('div');
+    inner.className = 'wishlist-bubble-pack-inner';
+    inner.style.width = pack.width + 'px';
+    inner.style.height = pack.height + 'px';
+    pack.placed.forEach((pos, i) => {
+      const { item } = sortedCircles[i];
+      const itemDisplay = String(item.itemDisplay ?? item.id ?? 'Item');
+      const timestamp = item.updatedAt || item.createdAt || null;
+      const bubble = document.createElement('button');
+      bubble.type = 'button';
+      bubble.className = 'wishlist-bubble';
+      bubble.title = timestamp ? `Updated ${formatRelativeTimestamp(timestamp)}` : '';
+      bubble.style.left = (pos.x - pos.r) + 'px';
+      bubble.style.top = (pos.y - pos.r) + 'px';
+      bubble.style.width = (pos.r * 2) + 'px';
+      bubble.style.height = (pos.r * 2) + 'px';
+      bubble.style.fontSize = Math.max(9, Math.min(13, pos.r * 0.42)) + 'px';
+      bubble.textContent = itemDisplay;
+      bubble.addEventListener('click', async () => {
         if (!wishlistState.pantryId) return;
         const pantryId = String(wishlistState.pantryId);
         try {
           await window.PantryAPI.addWishlist(pantryId, itemDisplay, 1);
-          // Refresh from backend to get latest state
           const data = await window.PantryAPI.getWishlist(pantryId);
           const refreshed = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
           const normalized = normalizeWishlistItems(refreshed);
@@ -1369,7 +1601,16 @@
           console.error('Error re-adding wishlist item:', err);
         }
       });
-      grid.appendChild(pill);
+      inner.appendChild(bubble);
+    });
+    wrapper.appendChild(inner);
+    grid.appendChild(wrapper);
+    requestAnimationFrame(() => {
+      const w = grid.offsetWidth || pack.width;
+      const scale = w / pack.width;
+      inner.style.transform = `scale(${scale})`;
+      inner.style.transformOrigin = 'top left';
+      wrapper.style.height = (pack.height * scale) + 'px';
     });
   }
 
@@ -1482,24 +1723,7 @@
     messageState.root = list;
     messageState.pantryId = String(pantry.id);
 
-    addBtn.onclick = async () => {
-      const userNameInput = window.prompt('Your name (optional):') || 'Community member';
-      const contentInput = window.prompt('Leave your message:');
-      if (!contentInput || !contentInput.trim()) return;
-      try {
-        await window.PantryAPI.postMessage(
-          String(pantry.id),
-          contentInput.trim(),
-          userNameInput.trim(),
-          null,
-          []
-        );
-        await loadMessages(pantry);
-      } catch (error) {
-        console.error('Error posting message:', error);
-        window.alert('Failed to post message. Please try again.');
-      }
-    };
+    addBtn.onclick = () => openMessageModal(pantry, () => loadMessages(pantry));
 
     if (toggleBtn) {
       toggleBtn.onclick = () => {
@@ -1517,11 +1741,11 @@
     overlay.innerHTML = `
       <div class="wishlist-modal" role="dialog" aria-modal="true">
         <button type="button" class="wishlist-modal-close" aria-label="Close">×</button>
-        <h3>Add wishlist item</h3>
+        <h3>Add item to wishlist</h3>
         <form class="wishlist-form">
           <label>
             <span>Item name</span>
-            <input type="text" name="item" maxlength="80" required placeholder="e.g. Rice" />
+            <input type="text" name="item" maxlength="20" required placeholder="e.g. Rice" />
           </label>
           <p class="wishlist-modal-hint">Items stay visible for 7 days.</p>
           <div class="wishlist-modal-error" aria-live="polite"></div>
@@ -1579,6 +1803,76 @@
         errorEl.textContent = 'Failed to add item. Please try again.';
         submitBtn.disabled = false;
         submitBtn.textContent = 'Add item';
+      }
+    });
+  }
+
+  function openMessageModal(pantry, onSuccess) {
+    const overlay = document.createElement('div');
+    overlay.className = 'wishlist-modal-overlay';
+    overlay.innerHTML = `
+      <div class="wishlist-modal" role="dialog" aria-modal="true" aria-labelledby="message-modal-title">
+        <button type="button" class="wishlist-modal-close" aria-label="Close">×</button>
+        <h3 id="message-modal-title">Leave a message</h3>
+        <form class="wishlist-form message-form">
+          <label>
+            <span>Your message</span>
+            <textarea name="content" maxlength="500" required placeholder="Leave your message to the host and the community..." rows="4"></textarea>
+          </label>
+          <div class="wishlist-modal-error" aria-live="polite"></div>
+          <div class="wishlist-modal-actions">
+            <button type="button" class="wishlist-modal-cancel">Cancel</button>
+            <button type="submit" class="wishlist-modal-submit">Post message</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.body.classList.add('modal-open');
+
+    const close = () => {
+      document.body.classList.remove('modal-open');
+      overlay.remove();
+    };
+
+    overlay.querySelector('.wishlist-modal-close').onclick = close;
+    overlay.querySelector('.wishlist-modal-cancel').onclick = close;
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+      }
+    });
+
+    const form = overlay.querySelector('.message-form');
+    const submitBtn = overlay.querySelector('.wishlist-modal-submit');
+    const errorEl = overlay.querySelector('.wishlist-modal-error');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      const formData = new FormData(form);
+      const content = String(formData.get('content') || '').trim();
+      if (!content) {
+        errorEl.textContent = 'Please enter your message.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Posting…';
+
+      try {
+        await window.PantryAPI.postMessage(String(pantry.id), content, 'Community member', null, []);
+        if (typeof onSuccess === 'function') await onSuccess();
+        close();
+      } catch (error) {
+        console.error('Error posting message:', error);
+        errorEl.textContent = 'Failed to post message. Please try again.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Post message';
       }
     });
   }
@@ -1749,14 +2043,14 @@
     
     if (forceLevel) {
       // Use forced level from donation data
-      statusLevel = forceLevel;
+      statusLevel = forceLevel === 'inactive' ? 'unknown' : forceLevel;
       if (forceLevel === 'high') {
-        statusLabel = 'Full';
+        statusLabel = 'High';
         ratio = 1.0; // 100% filled for high
       } else if (forceLevel === 'medium') {
         statusLabel = 'Medium';
         ratio = 0.66; // 66% filled for medium
-      } else if (forceLevel === 'inactive') {
+      } else if (forceLevel === 'inactive' || forceLevel === 'unknown') {
         statusLabel = 'Unknown';
         ratio = 0.0; // No fill for inactive
       } else {
@@ -1767,7 +2061,7 @@
       // Calculate from ratio
       if (ratio >= 0.75) {
         statusLevel = 'high';
-        statusLabel = 'Full';
+        statusLabel = 'High';
       } else if (ratio >= 0.4) {
         statusLevel = 'medium';
         statusLabel = 'Medium';
@@ -1786,7 +2080,8 @@
       'low': '#ef4444',      // Red
       'medium': '#f59e0b',   // Yellow/Orange
       'high': '#52b788',     // Green
-      'inactive': '#94a3b8' // Gray for lack of data
+      'unknown': '#94a3b8',  // Gray for lack of data
+      'inactive': '#94a3b8'  // Back-compat
     };
     const strokeColor = colorMap[statusLevel] || '#52b788';
     const textColor = strokeColor;
@@ -1803,6 +2098,150 @@
         </div>
       </div>
     `;
+  }
+
+  function parseTimestampMs(value) {
+    if (!value) return null;
+    const t = new Date(value).getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+
+  function stockLabelFromLevel(level) {
+    const l = String(level || '').toLowerCase().trim();
+    if (l === 'high') return 'High';
+    if (l === 'medium') return 'Medium';
+    if (l === 'low') return 'Low';
+    return 'Unknown';
+  }
+
+  function stockDescriptionFromLabel(label) {
+    if (label === 'Low') return 'Only a few items reported in the pantry.';
+    if (label === 'Medium') return 'About a bag of items reported in the pantry';
+    if (label === 'High') return 'More than a bag of items reported in the pantry.';
+    return 'No stock level updates reported in the past 48 hours';
+  }
+
+  function formatPoundsFromKg(weightKg) {
+    const n = Number(weightKg);
+    if (!Number.isFinite(n)) return null;
+    return Math.round(n * 2.2046226218);
+  }
+
+  function getStockInfoHelpText() {
+    return [
+      'Stock levels:',
+      'Unknown = when either sensors are not working, no sensors are installed, or no donations were reported in the last 24h',
+      'Low',
+      'Medium',
+      'High',
+    ].join('\n');
+  }
+
+  function renderStockCardInnerHtml(model = {}) {
+    const rawLevel = model.level || 'unknown';
+    const level = rawLevel === 'inactive' ? 'unknown' : rawLevel;
+    const label = stockLabelFromLevel(level);
+    const description = stockDescriptionFromLabel(label);
+
+    const lastUpdateIso = model.lastUpdateIso || null;
+    const lastUpdateSource = model.lastUpdateSource || null; // 'sensor' | 'self'
+    const noUpdateAvailable = model.noUpdateAvailable === true || !lastUpdateIso;
+
+    const lastUpdateLine = noUpdateAvailable
+      ? 'No update available'
+      : `Last update: ${formatDateTimeMinutes(lastUpdateIso)}`;
+
+    const pounds = (lastUpdateSource === 'sensor' && !noUpdateAvailable)
+      ? formatPoundsFromKg(model.sensorWeightKg)
+      : null;
+    const poundsLine = pounds != null ? `${pounds} lb of items detected` : '';
+
+    return `
+      <div class="stock-card-head">
+        <div class="stock-card-head-text">
+          <h2>Stock level</h2>
+          <div class="stock-card-desc">${description}</div>
+        </div>
+        <button class="stock-info-btn" type="button" aria-label="Stock level info" data-stock-info title="Stock level info">i</button>
+      </div>
+      ${renderStockGauge(0, 40, level)}
+      <div class="stock-meta">
+        <div class="stock-meta-line">${lastUpdateLine}</div>
+        ${poundsLine ? `<div class="stock-meta-line">${poundsLine}</div>` : ''}
+      </div>
+    `;
+  }
+
+  async function updateStockCardForPantry(pantry) {
+    if (!pantry || !pantry.id) return;
+    const stockSection = document.querySelector('.stock-section .stock-card');
+    if (!stockSection || !window.PantryAPI) return;
+
+    const canTelemetry = typeof window.PantryAPI.getTelemetryLatest === 'function';
+    const canDonations = typeof window.PantryAPI.getDonationBasedStock === 'function';
+
+    const [telemetryRes, donationRes] = await Promise.allSettled([
+      canTelemetry ? window.PantryAPI.getTelemetryLatest(pantry.id) : Promise.resolve(null),
+      canDonations ? window.PantryAPI.getDonationBasedStock(pantry.id) : Promise.resolve(null),
+    ]);
+
+    const telemetry = telemetryRes.status === 'fulfilled' ? telemetryRes.value : null;
+    const donationStock = donationRes.status === 'fulfilled' ? donationRes.value : null;
+
+    const telemetrySource = telemetry?.source || null;
+    const sensorish = telemetrySource === 'sensor' || telemetrySource === 'fallback_local';
+    const sensorWeightKgRaw = sensorish ? (telemetry?.weightKg ?? telemetry?.weight) : null;
+    const sensorWeightKg = sensorWeightKgRaw != null ? Number(sensorWeightKgRaw) : null;
+    const sensorUpdatedAt = sensorish ? (telemetry?.updatedAt ?? telemetry?.timestamp ?? null) : null;
+
+    const donationWeightKgRaw = donationStock?.weightKg ?? donationStock?.weight ?? null;
+    const donationWeightKg = donationWeightKgRaw != null ? Number(donationWeightKgRaw) : null;
+    const donationUpdatedAt = donationStock?.updatedAt ?? donationStock?.timestamp ?? null;
+
+    const sensorMs = parseTimestampMs(sensorUpdatedAt);
+    const donationMs = parseTimestampMs(donationUpdatedAt);
+
+    let lastUpdateIso = null;
+    let lastUpdateSource = null;
+    // Priority (keep previous logic): if pantry has usable sensor connection, sensor wins.
+    // Donations/self-report only used when sensor data is unavailable/unusable.
+    const hasUsableSensor =
+      sensorish &&
+      sensorWeightKg != null &&
+      typeof window.PantryAPI.isWeightInReasonableRange === 'function' &&
+      window.PantryAPI.isWeightInReasonableRange(sensorWeightKg);
+    if (hasUsableSensor) {
+      lastUpdateIso = sensorUpdatedAt;
+      lastUpdateSource = 'sensor';
+    } else if (donationMs != null) {
+      lastUpdateIso = donationUpdatedAt;
+      lastUpdateSource = 'self';
+    } else if (sensorMs != null) {
+      // If we have a sensor timestamp but no usable weight, still surface the update time.
+      lastUpdateIso = sensorUpdatedAt;
+      lastUpdateSource = 'sensor';
+    }
+
+    let weightForLevelKg = null;
+    if (hasUsableSensor) {
+      weightForLevelKg = sensorWeightKg;
+    } else if (donationWeightKg != null && window.PantryAPI.isWeightInReasonableRange(donationWeightKg)) {
+      weightForLevelKg = donationWeightKg;
+    }
+
+    let level = 'unknown';
+    if (weightForLevelKg != null && typeof window.PantryAPI.computeStockLevelFromWeight === 'function') {
+      const badge = window.PantryAPI.computeStockLevelFromWeight(weightForLevelKg);
+      if (badge?.level) level = badge.level;
+    }
+
+    stockSection.innerHTML = renderStockCardInnerHtml({
+      level,
+      lastUpdateIso,
+      lastUpdateSource,
+      sensorWeightKg: lastUpdateSource === 'sensor' ? sensorWeightKg : null,
+      noUpdateAvailable: !lastUpdateIso,
+    });
   }
 
   function formatDateTimeMinutes(isoString) {
@@ -2141,39 +2580,28 @@
     const color = typeColors[pantryType] || '#f59e0b';
     const colorDark = typeColorsDark[pantryType] || '#b45309';
     const selectedColor = isSelected ? colorDark : color;
-    if (isSelected) {
-      return L.divIcon({
-        className: 'pantry-marker pantry-marker-selected',
-        html: `<div style="
-          width: 40px; height: 40px;
-          border: 4px solid ${selectedColor};
-          background: white;
-          border-radius: 50%;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-          display: flex; align-items: center; justify-content: center;
-          cursor: pointer; transition: transform 0.2s;
-        " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-          <div style="width: 16px; height: 16px; background: ${selectedColor}; border-radius: 50%;"></div>
-        </div>`,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20]
-      });
-    }
-    return L.divIcon({
-      className: 'pantry-marker',
-      html: `<div style="
-        width: 32px; height: 32px;
-        background: ${color};
-        border: 3px solid white;
-        border-radius: 50%;
-        box-shadow: 0 3px 8px rgba(0,0,0,0.25);
-        display: flex; align-items: center; justify-content: center;
-        cursor: pointer; transition: transform 0.2s;
-      " onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
-        <div style="width: 12px; height: 12px; background: white; border-radius: 50%;"></div>
-      </div>`,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16]
+    const svg = (() => {
+      const ringStroke = selectedColor;
+      const shadowOpacity = isSelected ? 0.42 : 0.32;
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
+          <defs>
+            <filter id="ds" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="rgba(15,23,42,${shadowOpacity})"/>
+            </filter>
+          </defs>
+          <path filter="url(#ds)" d="M16 41s12-11.1 12-23C28 11.4 22.6 6 16 6S4 11.4 4 18c0 11.9 12 23 12 23z" fill="${ringStroke}"/>
+          <circle cx="16" cy="18" r="7.5" fill="#ffffff" stroke="${ringStroke}" stroke-width="5"/>
+        </svg>
+      `.trim();
+    })();
+
+    const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+    return L.icon({
+      iconUrl,
+      iconSize: [32, 42],
+      iconAnchor: [16, 41],
+      className: isSelected ? 'pantry-marker pantry-marker-selected' : 'pantry-marker'
     });
   }
 
@@ -2402,7 +2830,7 @@
 
       <section class="detail-section donor-notes-section">
         <h2>Post a Donation</h2>
-        <button class="donor-notes-cta" type="button" data-donor-note-add>report your new donation</button>
+        <button class="donor-notes-cta" type="button" data-donor-note-add>Report your donation here!</button>
         <div class="donor-notes-latest" data-donor-notes-latest>
           <div class="donor-note-empty">Loading…</div>
         </div>
@@ -2436,12 +2864,29 @@
     const closeBtn = document.getElementById('closeDetails');
     closeBtn.addEventListener('click', () => {
       const detailsPanel = document.getElementById('details');
-  	    currentPantry = null;
-  	    updateMarkerIcons();
-  	    resetMapToDefaultView();
-  	    detailsPanel.classList.remove('collapsed');
-  	    showListForCurrentView();
-  	    updateCollapseButton(false);
+      if (!detailsPanel) return;
+
+      // If a pantry is selected, arrow acts as "back to list"
+      if (currentPantry) {
+        currentPantry = null;
+        updateMarkerIcons();
+        resetMapToDefaultView();
+        detailsPanel.classList.remove('hidden');
+        detailsPanel.classList.remove('collapsed');
+        showListForCurrentView();
+        updateCollapseButton(false);
+        return;
+      }
+
+      // If already on list view, arrow toggles collapse/expand of the pantry list
+      const isCollapsed = detailsPanel.classList.contains('collapsed');
+      if (isCollapsed) {
+        detailsPanel.classList.remove('collapsed');
+        updateCollapseButton(false);
+      } else {
+        detailsPanel.classList.add('collapsed');
+        updateCollapseButton(true);
+      }
     });
     
     // Status filter
@@ -2456,6 +2901,12 @@
     const detailsContent = document.getElementById('detailsContent');
     if (detailsContent) {
       detailsContent.addEventListener('click', (e) => {
+        const infoBtn = e.target && e.target.closest ? e.target.closest('[data-stock-info]') : null;
+        if (infoBtn) {
+          e.preventDefault();
+          alert(getStockInfoHelpText());
+          return;
+        }
         const target = e.target.closest('.list-item');
         if (target) {
           e.preventDefault();
@@ -2703,8 +3154,11 @@
       // Display donation items
       const donationItems = Array.isArray(note.donationItems) ? note.donationItems : [];
       if (donationItems.length > 0) {
-        const itemsText = donationItems.join(', ');
-        inner += `<p class="donor-note-text"><strong>Items:</strong> ${itemsText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+        const chipsHtml = donationItems
+          .map((it) => String(it).replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+          .map((safe) => `<span class="donor-note-chip">${safe}</span>`)
+          .join('');
+        inner += `<div class="donor-note-text donor-note-items"><strong>Items:</strong><div class="donor-note-chips">${chipsHtml}</div></div>`;
       }
       
       // Display message if present
@@ -2740,11 +3194,11 @@
     overlay.innerHTML = `
       <div class="donor-note-modal" role="dialog" aria-modal="true" aria-labelledby="donor-note-modal-title">
         <button type="button" class="donor-note-modal-close" aria-label="Close">×</button>
-        <h3 id="donor-note-modal-title">Report your donation</h3>
-        <p class="donor-note-modal-hint">Please select how much you are donating. All other fields are optional.</p>
+        <h3 id="donor-note-modal-title">Report a donation</h3>
+        <p class="donor-note-modal-hint">Please describe below what you are donating</p>
         <form class="donor-note-form">
           <label>
-            <span>How much are you donating?</span>
+            <span>How much are you donating in total?</span>
             <select name="donationSize" required>
               <option value="">Select size...</option>
               <option value="low_donation">ONE OR FEW ITEMS</option>
@@ -2752,30 +3206,34 @@
               <option value="high_donation">MORE THAN 1 GROCERY BAG</option>
             </select>
           </label>
-          <label>
-            <span>What are you donating?</span>
-            <select name="itemType">
-              <option value="">Select type (optional)...</option>
-              <option value="fresh produce">Fresh produce</option>
-              <option value="cans">Cans</option>
-              <option value="beans">Beans</option>
-              <option value="liquids">Liquids</option>
-              <option value="other">Other</option>
-            </select>
-            <input type="text" name="itemKeywords" class="donor-note-keywords-input" placeholder="Or add keywords (e.g., rice, pasta, vegetables)" />
-          </label>
-          <label class="donor-note-photo-label">
-            <span>Post a photo!</span>
-            <input type="file" name="photo" accept="image/*" />
-          </label>
+          <div class="donor-note-categories-label">
+            <span class="donor-note-categories-title">What are you donating? Select all that apply</span>
+            <div class="donor-note-categories-list">
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Canned & jarred food (canned soup, beans, etc.)"> Canned & jarred food (canned soup, beans, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Dry goods (pasta, rice, etc.)"> Dry goods (pasta, rice, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Fresh food (produce, fruits, etc.)"> Fresh food (produce, fruits, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Cooked & ready-to-eat food (sandwiches, etc.)"> Cooked & ready-to-eat food (sandwiches, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Beverages (bottled water, juice boxes, etc.)"> Beverages (bottled water, juice boxes, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Breakfast & snack food (cereal, granola bars, etc.)"> Breakfast & snack food (cereal, granola bars, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Baby & child items (diapers, baby wipes, etc.)"> Baby & child items (diapers, baby wipes, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Personal hygiene & health items (toothbrushes, pain relievers, etc.)"> Personal hygiene & health items (toothbrushes, pain relievers, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Household essentials (paper towels, laundry detergent, etc.)"> Household essentials (paper towels, laundry detergent, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Clothing items (blankets, socks, etc.)"> Clothing items (blankets, socks, etc.)</label>
+              <label class="donor-note-category-item"><input type="checkbox" name="donationCategories" value="Other"> Other</label>
+            </div>
+          </div>
           <label>
             <span>Leave a message (optional)</span>
-            <textarea name="message" rows="3" placeholder="Add any additional details about your donation..."></textarea>
+            <textarea name="message" rows="3" placeholder="Leave a message (optional)"></textarea>
+          </label>
+          <label class="donor-note-photo-label">
+            <span>Post a photo (optional)</span>
+            <input type="file" name="photo" accept="image/*" />
           </label>
           <div class="donor-note-modal-error" aria-live="polite"></div>
           <div class="donor-note-modal-actions">
             <button type="button" class="donor-note-modal-cancel">Cancel</button>
-            <button type="submit" class="donor-note-modal-submit">Submit report</button>
+            <button type="submit" class="donor-note-modal-submit">Submit</button>
           </div>
         </form>
       </div>
@@ -2805,31 +3263,20 @@
     const errorEl = overlay.querySelector('.donor-note-modal-error');
     const photoInput = form.querySelector('input[name="photo"]');
     const donationSizeInput = form.querySelector('select[name="donationSize"]');
-    const itemTypeInput = form.querySelector('select[name="itemType"]');
-    const itemKeywordsInput = form.querySelector('input[name="itemKeywords"]');
     const messageInput = form.querySelector('textarea[name="message"]');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorEl.textContent = '';
       const donationSize = (donationSizeInput && donationSizeInput.value) ? String(donationSizeInput.value).trim() : '';
-      const itemType = (itemTypeInput && itemTypeInput.value) ? String(itemTypeInput.value).trim() : '';
-      const itemKeywords = (itemKeywordsInput && itemKeywordsInput.value) ? String(itemKeywordsInput.value).trim() : '';
       const message = (messageInput && messageInput.value) ? String(messageInput.value).trim() : '';
       const file = photoInput && photoInput.files && photoInput.files[0];
+      const checkedCategories = form.querySelectorAll('input[name="donationCategories"]:checked');
+      const donationItems = Array.from(checkedCategories).map(cb => cb.value);
       
       if (!donationSize) {
-        errorEl.textContent = 'Please select how much you are donating.';
+        errorEl.textContent = 'Please select how much you are donating in total.';
         return;
-      }
-
-      // Combine item type and keywords
-      const donationItems = [];
-      if (itemType) donationItems.push(itemType);
-      if (itemKeywords) {
-        // Split keywords by comma or space and add them
-        const keywords = itemKeywords.split(/[,\s]+/).filter(k => k.trim().length > 0);
-        donationItems.push(...keywords);
       }
 
       submitBtn.disabled = true;
@@ -2838,23 +3285,9 @@
       try {
         let photoUrls = [];
         if (file) {
-          const sas = await window.PantryAPI.createDonationUploadSas(pantry.id, file);
-          const uploadUrl = sas?.uploadUrl;
-          const blobUrl = sas?.blobUrl;
-          if (!uploadUrl || !blobUrl) {
-            throw new Error('Could not get upload link.');
-          }
-          const putRes = await fetch(uploadUrl, {
-            method: 'PUT',
-            headers: {
-              'x-ms-blob-type': 'BlockBlob',
-              'Content-Type': file.type
-            },
-            body: file
-          });
-          if (!putRes.ok) {
-            throw new Error('Upload failed. Please try again.');
-          }
+          const uploaded = await window.PantryAPI.uploadDonationPhoto(pantry.id, file);
+          const blobUrl = uploaded?.blobUrl;
+          if (!blobUrl) throw new Error('Upload failed. Please try again.');
           photoUrls = [blobUrl];
         }
         const payload = { 
@@ -2866,8 +3299,7 @@
         console.log('Submitting donation report:', payload);
         await window.PantryAPI.postDonation(pantry.id, payload);
         if (donationSizeInput) donationSizeInput.value = '';
-        if (itemTypeInput) itemTypeInput.value = '';
-        if (itemKeywordsInput) itemKeywordsInput.value = '';
+        form.querySelectorAll('input[name="donationCategories"]').forEach(cb => { cb.checked = false; });
         if (messageInput) messageInput.value = '';
         if (photoInput) photoInput.value = '';
         if (typeof onSuccess === 'function') await onSuccess();
@@ -2989,27 +3421,86 @@
     }
   }
 
+  function computeCirclePack(circles) {
+    const padding = 10;
+    const placed = [];
+    const centerX = 150;
+    const centerY = 150;
+    const sorted = circles.slice().sort((a, b) => b.r - a.r);
+    for (let i = 0; i < sorted.length; i++) {
+      const r = sorted[i].r;
+      let x, y;
+      if (i === 0) {
+        x = centerX;
+        y = centerY;
+      } else {
+        let found = false;
+        for (let t = 0; t < 400 && !found; t++) {
+          const angle = t * 0.55;
+          const dist = 35 + t * 2.2;
+          const tx = centerX + dist * Math.cos(angle);
+          const ty = centerY + dist * Math.sin(angle);
+          let ok = true;
+          for (const p of placed) {
+            const d = Math.hypot(tx - p.x, ty - p.y);
+            if (d < r + p.r + 2) { ok = false; break; }
+          }
+          if (ok) { x = tx; y = ty; found = true; }
+        }
+        if (x == null) { x = centerX + (i % 3) * 45; y = centerY + Math.floor(i / 3) * 45; }
+      }
+      placed.push({ x, y, r });
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of placed) {
+      minX = Math.min(minX, p.x - p.r);
+      minY = Math.min(minY, p.y - p.r);
+      maxX = Math.max(maxX, p.x + p.r);
+      maxY = Math.max(maxY, p.y + p.r);
+    }
+    const width = maxX - minX + padding * 2;
+    const height = maxY - minY + padding * 2;
+    return { placed: placed.map(p => ({ x: p.x - minX + padding, y: p.y - minY + padding, r: p.r })), width, height };
+  }
+
   function renderWishlistItems(grid, items) {
     grid.innerHTML = '';
     if (!Array.isArray(items) || items.length === 0) {
       grid.innerHTML = `<div class="wishlist-empty">No wishlist items in the last 7 days.</div>`;
       return;
     }
-    items.forEach(item => {
-      const qty = Number.isFinite(item.count) && item.count > 0 ? item.count : 1; // Backend aggregates count
-      const timestamp = item.updatedAt || item.createdAt || null; // Prefer freshest timestamp regardless of field name
-      const itemDisplay = String(item.itemDisplay ?? item.id ?? 'Item'); // Use backend agg label
-      const pill = document.createElement('button');
-      pill.type = 'button';
-      pill.className = 'wishlist-chip';
-      pill.title = timestamp ? `Updated ${formatRelativeTimestamp(timestamp)}` : '';
-      pill.textContent = qty > 1 ? `${itemDisplay} × ${qty}` : itemDisplay; // Surface quantity inline when greater than one
-      pill.addEventListener('click', async () => {
+    const circles = items.map(item => {
+      const qty = Number.isFinite(item.count) && item.count > 0 ? item.count : 1;
+      const r = Math.max(28, 16 + Math.min(qty, 12) * 5);
+      return { item, r };
+    });
+    const pack = computeCirclePack(circles);
+    const sortedCircles = circles.slice().sort((a, b) => b.r - a.r);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'wishlist-bubble-pack';
+    const inner = document.createElement('div');
+    inner.className = 'wishlist-bubble-pack-inner';
+    inner.style.width = pack.width + 'px';
+    inner.style.height = pack.height + 'px';
+    pack.placed.forEach((pos, i) => {
+      const { item } = sortedCircles[i];
+      const itemDisplay = String(item.itemDisplay ?? item.id ?? 'Item');
+      const timestamp = item.updatedAt || item.createdAt || null;
+      const bubble = document.createElement('button');
+      bubble.type = 'button';
+      bubble.className = 'wishlist-bubble';
+      bubble.title = timestamp ? `Updated ${formatRelativeTimestamp(timestamp)}` : '';
+      bubble.style.left = (pos.x - pos.r) + 'px';
+      bubble.style.top = (pos.y - pos.r) + 'px';
+      bubble.style.width = (pos.r * 2) + 'px';
+      bubble.style.height = (pos.r * 2) + 'px';
+      bubble.style.fontSize = Math.max(9, Math.min(13, pos.r * 0.42)) + 'px';
+      bubble.textContent = itemDisplay;
+      bubble.addEventListener('click', async () => {
         if (!wishlistState.pantryId) return;
         const pantryId = String(wishlistState.pantryId);
         try {
           await window.PantryAPI.addWishlist(pantryId, itemDisplay, 1);
-          // Refresh from backend to get latest state
           const data = await window.PantryAPI.getWishlist(pantryId);
           const refreshed = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
           const normalized = normalizeWishlistItems(refreshed);
@@ -3019,7 +3510,16 @@
           console.error('Error re-adding wishlist item:', err);
         }
       });
-      grid.appendChild(pill);
+      inner.appendChild(bubble);
+    });
+    wrapper.appendChild(inner);
+    grid.appendChild(wrapper);
+    requestAnimationFrame(() => {
+      const w = grid.offsetWidth || pack.width;
+      const scale = w / pack.width;
+      inner.style.transform = `scale(${scale})`;
+      inner.style.transformOrigin = 'top left';
+      wrapper.style.height = (pack.height * scale) + 'px';
     });
   }
 
@@ -3132,24 +3632,7 @@
     messageState.root = list;
     messageState.pantryId = String(pantry.id);
 
-    addBtn.onclick = async () => {
-      const userNameInput = window.prompt('Your name (optional):') || 'Community member';
-      const contentInput = window.prompt('Leave your message:');
-      if (!contentInput || !contentInput.trim()) return;
-      try {
-        await window.PantryAPI.postMessage(
-          String(pantry.id),
-          contentInput.trim(),
-          userNameInput.trim(),
-          null,
-          []
-        );
-        await loadMessages(pantry);
-      } catch (error) {
-        console.error('Error posting message:', error);
-        window.alert('Failed to post message. Please try again.');
-      }
-    };
+    addBtn.onclick = () => openMessageModal(pantry, () => loadMessages(pantry));
 
     if (toggleBtn) {
       toggleBtn.onclick = () => {
@@ -3167,11 +3650,11 @@
     overlay.innerHTML = `
       <div class="wishlist-modal" role="dialog" aria-modal="true">
         <button type="button" class="wishlist-modal-close" aria-label="Close">×</button>
-        <h3>Add wishlist item</h3>
+        <h3>Add item to wishlist</h3>
         <form class="wishlist-form">
           <label>
             <span>Item name</span>
-            <input type="text" name="item" maxlength="80" required placeholder="e.g. Rice" />
+            <input type="text" name="item" maxlength="20" required placeholder="e.g. Rice" />
           </label>
           <p class="wishlist-modal-hint">Items stay visible for 7 days.</p>
           <div class="wishlist-modal-error" aria-live="polite"></div>
@@ -3229,6 +3712,76 @@
         errorEl.textContent = 'Failed to add item. Please try again.';
         submitBtn.disabled = false;
         submitBtn.textContent = 'Add item';
+      }
+    });
+  }
+
+  function openMessageModal(pantry, onSuccess) {
+    const overlay = document.createElement('div');
+    overlay.className = 'wishlist-modal-overlay';
+    overlay.innerHTML = `
+      <div class="wishlist-modal" role="dialog" aria-modal="true" aria-labelledby="message-modal-title">
+        <button type="button" class="wishlist-modal-close" aria-label="Close">×</button>
+        <h3 id="message-modal-title">Leave a message</h3>
+        <form class="wishlist-form message-form">
+          <label>
+            <span>Your message</span>
+            <textarea name="content" maxlength="500" required placeholder="Leave your message to the host and the community..." rows="4"></textarea>
+          </label>
+          <div class="wishlist-modal-error" aria-live="polite"></div>
+          <div class="wishlist-modal-actions">
+            <button type="button" class="wishlist-modal-cancel">Cancel</button>
+            <button type="submit" class="wishlist-modal-submit">Post message</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.body.classList.add('modal-open');
+
+    const close = () => {
+      document.body.classList.remove('modal-open');
+      overlay.remove();
+    };
+
+    overlay.querySelector('.wishlist-modal-close').onclick = close;
+    overlay.querySelector('.wishlist-modal-cancel').onclick = close;
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+      }
+    });
+
+    const form = overlay.querySelector('.message-form');
+    const submitBtn = overlay.querySelector('.wishlist-modal-submit');
+    const errorEl = overlay.querySelector('.wishlist-modal-error');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      const formData = new FormData(form);
+      const content = String(formData.get('content') || '').trim();
+      if (!content) {
+        errorEl.textContent = 'Please enter your message.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Posting…';
+
+      try {
+        await window.PantryAPI.postMessage(String(pantry.id), content, 'Community member', null, []);
+        if (typeof onSuccess === 'function') await onSuccess();
+        close();
+      } catch (error) {
+        console.error('Error posting message:', error);
+        errorEl.textContent = 'Failed to post message. Please try again.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Post message';
       }
     });
   }

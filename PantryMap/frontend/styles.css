@@ -328,8 +328,52 @@ nav a { text-decoration: none; }
   box-shadow: none;
   outline: 1pt solid rgba(148, 163, 184, 0.35);
 }
+.stock-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.stock-card-head-text {
+  min-width: 0;
+}
 .stock-card-head h2 {
-  margin: 0 0 12px;
+  margin: 0;
+}
+.stock-card-desc {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.35;
+}
+.stock-info-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid rgba(44, 62, 80, 0.6);
+  background: transparent;
+  color: rgba(44, 62, 80, 0.85);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.stock-info-btn:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+.stock-meta {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.stock-meta-line {
+  margin: 0;
 }
 
 /* Shared card style for detail sections (wishlist) */
@@ -446,6 +490,28 @@ nav a { text-decoration: none; }
   line-height: 1.6;
   color: var(--text);
 }
+.donor-note-items strong {
+  display: inline-block;
+}
+.donor-note-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.donor-note-chip {
+  display: inline-block;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(82, 183, 136, 0.14);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+  word-break: break-word;
+}
 .donor-note-time {
   font-size: 12px;
   color: var(--muted);
@@ -523,6 +589,39 @@ nav a { text-decoration: none; }
   resize: vertical;
   min-height: 72px;
 }
+.donor-note-categories-title {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+.donor-note-categories-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.donor-note-category-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+.donor-note-category-item:last-child {
+  margin-bottom: 0;
+}
+.donor-note-category-item input[type="checkbox"] {
+  margin: 2px 0 0;
+  flex-shrink: 0;
+}
+.donor-note-categories-label {
+  margin-bottom: 12px;
+}
 .donor-note-form select[required] {
   border-color: var(--primary, #52b788);
 }
@@ -582,21 +681,47 @@ nav a { text-decoration: none; }
   outline: 1pt solid rgba(148, 163, 184, 0.45);
 }
 .wishlist-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  width: 100%;
+  min-height: 120px;
+  position: relative;
 }
-.wishlist-chip {
-  display: inline-flex;
+/* Bubble chart (circle packing) container */
+.wishlist-bubble-pack {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+.wishlist-bubble-pack-inner {
+  position: relative;
+  left: 0;
+  top: 0;
+}
+.wishlist-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 20px;
-  background: rgba(82, 183, 136, 0.1);
-  border: 1px solid rgba(82, 183, 136, 0.18);
-  font-size: 14px;
-  font-weight: 500;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  cursor: pointer;
+  font-weight: 600;
   color: var(--primary);
+  background: rgba(82, 183, 136, 0.18);
+  border: 2px solid rgba(82, 183, 136, 0.35);
+  box-shadow: 0 2px 8px rgba(82, 183, 136, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  word-break: break-word;
+  line-height: 1.15;
+  overflow: hidden;
+}
+.wishlist-bubble:hover {
+  transform: scale(1.06);
+  box-shadow: 0 4px 16px rgba(82, 183, 136, 0.3);
+  background: rgba(82, 183, 136, 0.25);
 }
 .wishlist-chip-count {
   color: rgba(45, 55, 72, 0.7);
@@ -739,6 +864,26 @@ nav a { text-decoration: none; }
   background: #f7f9fb;
 }
 .wishlist-form input:focus {
+  outline: none;
+  border-color: rgba(82, 183, 136, 0.6);
+  box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.18);
+}
+.wishlist-form textarea,
+.message-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 15px;
+  color: var(--text);
+  background: #f7f9fb;
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+.wishlist-form textarea:focus,
+.message-form textarea:focus {
   outline: none;
   border-color: rgba(82, 183, 136, 0.6);
   box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.18);
@@ -942,6 +1087,7 @@ nav a { text-decoration: none; }
 .stock.low { color: #ef4444; }
 .stock.medium { color: #f59e0b; }
 .stock.high { color: var(--accent); }
+.stock.unknown { color: var(--muted); }
 .dot { color: var(--muted); }
 .restock { color: var(--muted); }
 .chevron { color: var(--accent); font-size: 22px; font-weight: 700; display:flex; align-items:center; justify-content:center; }
@@ -1409,6 +1555,51 @@ nav a { text-decoration: none; }
   border: none !important;
 }
 
+/* Pin-style map marker (ring with pointy bottom) */
+.pantry-pin {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 6px solid var(--marker-color, #f97316);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  isolation: isolate;
+  z-index: 2;
+}
+
+.pantry-pin::after {
+  content: '';
+  position: absolute;
+  bottom: -11px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 16px;
+  height: 16px;
+  background: var(--marker-color, #f97316);
+  border-radius: 0 0 6px 0;
+  box-shadow: inherit;
+  z-index: -1;
+}
+
+.pantry-pin-inner {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  z-index: 3;
+}
+
+.pantry-pin-selected {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.4);
+}
+
 @media (max-width: 680px) {
   .app-header { padding: 12px 16px; }
   .kv-2col { grid-template-columns: 1fr; }
@@ -1455,10 +1646,6 @@ nav a { text-decoration: none; }
   }
   .detail-description {
     font-size: 14px;
-  }
-  .wishlist-chip {
-    font-size: 13px;
-    padding: 8px 14px;
   }
   .support-card {
     font-size: 14px;

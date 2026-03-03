@@ -247,8 +247,8 @@ http://127.0.0.1:5500/
     npm i -g azurite
     azurite
     ```
-- **浏览器 CORS 报错**
-  - 检查 `Host.CORS` 是否包含你的前端端口
+- **浏览器 CORS 报错（如 post message 失败）**
+  - 在 `functions-backend/local.settings.json` 的 `Host.CORS` 中加入你前端的完整 origin（例如 `http://localhost:5173` 或 `http://127.0.0.1:5501`），用英文逗号分隔；改完后需重启后端（Ctrl+C 后重新 `npm start -- --port 7071`）。
 - **地图空白**
   - `/api/pantries` 500 + 前端 fallback 是否生效
 - **donation 图片 PUT 失败**

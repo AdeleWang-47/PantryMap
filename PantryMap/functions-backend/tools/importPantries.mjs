@@ -6,7 +6,8 @@ const endpoint = process.env.COSMOS_ENDPOINT;
 const key = process.env.COSMOS_KEY;
 
 const databaseId = process.env.COSMOS_DATABASE || "microPantry";
-const containerId = process.env.COSMOS_CONTAINER_PANTRIES || "pantries";
+// Keep in sync with pantries.ts / pantryById.ts defaults
+const containerId = process.env.COSMOS_CONTAINER_PANTRIES || "pantries-items";
 
 // 改成你的 jsonl 路径（建议把文件放到 functions-backend/data/ 里）
 const inputPath = process.argv[2] || "./data/export_df_cosmos_ready.jsonl";

@@ -21,20 +21,36 @@ export async function getPantries(
     if (req.method === "OPTIONS") return handleOptions(req);
     const origin = req.headers.get("origin");
     const dbName = process.env.COSMOS_DATABASE ?? "microPantry";
-    const containerName = process.env.COSMOS_CONTAINER_PANTRIES ?? "pantries";
+    // Default container name aligned with Cosmos: pantries-items
+    const containerName = process.env.COSMOS_CONTAINER_PANTRIES ?? "pantries-items";
 
     const client = getClient();
     const container = client.database(dbName).container(containerName);
 
     // Select common UI fields while avoiding Cosmos system metadata.
-    // NOTE: include optional photo/address fields because frontend expects them when present.
+    // NOTE:
+    // - include optional photo/address fields because frontend expects them when present.
+    // - include stock / telemetry fields so PantryAPI can compute stockLevel consistently
+    //   for both the map list and the pantry detail view.
     const query = `
       SELECT
         c.id, c.name, c.location, c.description, c.detail, c.status, c.updatedAt,
         c.photos, c.img_link, c.imgLink,
         c.url, c.urls, c.photoUrl, c.photoUrls, c.imageUrl, c.imageUrls, c.image, c.imgUrl, c.imgURL,
         c.address, c.adress, c.city, c.town, c.state, c.region, c.zip, c.zipcode, c.postalCode,
-        c.refrigerated, c.pantryType, c.type
+        c.refrigerated, c.pantryType, c.type,
+
+        -- Stock / telemetry and donation fields used by PantryAPI.resolveStockLevel(...)
+        c.sensors,
+        c.weightKg, c.weight, c.current_weight, c.loadcell_kg,
+        c.tot_reported_weight, c.totReportedWeight, c.reportedWeightKg,
+        c.donation_datetime, c.donationDatetime, c.lastDonationAt,
+
+        -- Activity / timestamp fields used for latestActivity + stockLevelUpdatedAt fallbacks
+        c.latestActivity, c.lastActivity, c.lastDonation, c.timestamp, c.time, c._ts,
+
+        -- Inventory / wishlist / stats (lightweight and useful in list view)
+        c.inventory, c.categories, c.acceptedFoodTypes, c.hours, c.wishlist, c.stats, c.visitsPerDay
       FROM c
     `;
 

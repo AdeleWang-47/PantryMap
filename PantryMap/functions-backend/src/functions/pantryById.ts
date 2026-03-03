@@ -26,7 +26,8 @@ export async function getPantryById(
     }
 
     const dbName = process.env.COSMOS_DATABASE ?? "microPantry";
-    const containerName = process.env.COSMOS_CONTAINER_PANTRIES ?? "pantries";
+    // Default container name aligned with Cosmos: pantries-items
+    const containerName = process.env.COSMOS_CONTAINER_PANTRIES ?? "pantries-items";
 
     const client = getClient();
     const container = client.database(dbName).container(containerName);
