@@ -8,7 +8,7 @@
    */
 
   const API = {};
-  // Use window.PantryAPI_CONFIG?.apiBaseUrl for production (e.g. Azure) so Beacon Hill (254) gets sensor data from GetLatestPantry
+  // Use window.PantryAPI_CONFIG?.apiBaseUrl for production (e.g. Azure) so pantry 4015 (hardware) gets sensor data from GetLatestPantry
   const API_BASE_URL = (typeof window !== 'undefined' && window.PantryAPI_CONFIG && window.PantryAPI_CONFIG.apiBaseUrl) || 'http://localhost:7071/api';
   const FALLBACK_PANTRIES_URL = './pantries.json';
 
@@ -103,7 +103,7 @@
   const DONATION_24H_MS = 24 * 60 * 60 * 1000;
 
   // Stock level (sens_weight / tot_reported_weight vs low_weight / high_weight)
-  // Reasonable range: > -2 kg & < 150 kg so sensor readings like Beacon Hill (~78 kg) are accepted.
+  // Reasonable range: > -2 kg & < 150 kg so sensor readings (e.g. pantry 4015) are accepted.
   // ---------------------------
   const STOCK_PARAMS = {
     reasonableMin: -2,
@@ -127,7 +127,7 @@
     if (n === null || !isWeightInReasonableRange(n)) return null;
     if (n <= STOCK_PARAMS.low_weight) return { level: 'low', label: 'Low Stock', cls: 'low' };
     if (n <= STOCK_PARAMS.high_weight) return { level: 'medium', label: 'Medium Stock', cls: 'medium' };
-    return { level: 'high', label: 'In Stock', cls: 'high' };
+    return { level: 'high', label: 'High Stock', cls: 'high' };
   }
 
   /**
@@ -677,9 +677,7 @@
   }
 
   /**
-   * Self-reported mode: estimate tot_reported_weight from donations in the last 24 hours.
-   * Backend already returns only donations within 24h; we do not re-filter by client time to avoid clock skew.
-   * Mapping: low_donation → 2 kg, medium_donation → 10 kg, high_donation → 25 kg.
+   * Donation-based stock: only posts within 24h. Conversion: 5× Low = 1× Medium, 2× Medium = 1× High.
    * Returns { weightKg, updatedAt, source: 'donations' } or null if no donations in 24h.
    */
   API.getDonationBasedStock = async function getDonationBasedStock(pantryId) {
@@ -688,26 +686,24 @@
     try {
       const data = await API.getDonations(pantryId, 1, 100);
       const items = Array.isArray(data?.items) ? data.items : [];
-      // Backend already filters to 24h; use all returned items and sort by time descending (no client re-filter to avoid clock skew)
-      const recent = items.slice().sort((a, b) => getDonationTimeMs(b) - getDonationTimeMs(a));
+      const now = Date.now();
+      const cutoff = now - DONATION_24H_MS;
+      const within24h = items.filter((d) => getDonationTimeMs(d) >= cutoff);
+      const recent = within24h.slice().sort((a, b) => getDonationTimeMs(b) - getDonationTimeMs(a));
       if (recent.length === 0) return null;
 
       const countLow = recent.filter((d) => (d.donationSize || '') === 'low_donation').length;
       const countMedium = recent.filter((d) => (d.donationSize || '') === 'medium_donation').length;
       const countHigh = recent.filter((d) => (d.donationSize || '') === 'high_donation').length;
-
+      // 5× Low = 1× Medium; 2× Medium = 1× High. Units: low=1, medium=5, high=10.
+      const totalUnits = countLow * 1 + countMedium * 5 + countHigh * 10;
       let weightKg = null;
+      if (totalUnits >= 10) weightKg = DONATION_WEIGHT_KG.high_donation;
+      else if (totalUnits >= 5) weightKg = DONATION_WEIGHT_KG.medium_donation;
+      else if (totalUnits >= 1) weightKg = DONATION_WEIGHT_KG.low_donation;
+
       const firstTs = recent[0].createdAt ?? recent[0].created_at ?? recent[0].updatedAt ?? recent[0].timestamp;
       const updatedAt = firstTs != null && firstTs !== '' ? (typeof firstTs === 'string' ? firstTs : new Date(firstTs).toISOString()) : new Date().toISOString();
-
-      if (countHigh >= 2) {
-        weightKg = DONATION_WEIGHT_KG.high_donation;
-      } else if (countLow >= 5) {
-        weightKg = DONATION_WEIGHT_KG.medium_donation;
-      } else {
-        const size = (recent[0].donationSize || '').trim();
-        weightKg = DONATION_WEIGHT_KG[size] != null ? DONATION_WEIGHT_KG[size] : null;
-      }
 
       if (weightKg == null || !Number.isFinite(weightKg)) return null;
       const tsStr = typeof updatedAt === 'string' ? updatedAt : (updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt));
@@ -862,7 +858,7 @@
     return API.getWishlist(pantryId);
   };
 
-  // Stock / Telemetry priority: 1) Sensor (API telemetry/latest e.g. Beacon Hill 254 → Azure SQL);
+  // Stock / Telemetry priority: 1) Sensor (API telemetry/latest e.g. pantry 4015 → Azure SQL);
   // 2) Local device_to_pantry + pantry_data.json (within 24h); 3) Donations (last 24h). Sensor is always tried first.
   API.getTelemetryLatest = async function getTelemetryLatest(pantryId) {
     const { normalized: normalizedId } = resolvePantryId(pantryId);
@@ -982,7 +978,7 @@
    */
 
   const API = {};
-  // Use window.PantryAPI_CONFIG?.apiBaseUrl for production (e.g. Azure) so Beacon Hill (254) gets sensor data from GetLatestPantry
+  // Use window.PantryAPI_CONFIG?.apiBaseUrl for production (e.g. Azure) so pantry 4015 (hardware) gets sensor data from GetLatestPantry
   const API_BASE_URL = (typeof window !== 'undefined' && window.PantryAPI_CONFIG && window.PantryAPI_CONFIG.apiBaseUrl) || 'http://localhost:7071/api';
   const FALLBACK_PANTRIES_URL = './pantries.json';
 
@@ -1077,7 +1073,7 @@
   const DONATION_24H_MS = 24 * 60 * 60 * 1000;
 
   // Stock level (sens_weight / tot_reported_weight vs low_weight / high_weight)
-  // Reasonable range: > -2 kg & < 150 kg so sensor readings like Beacon Hill (~78 kg) are accepted.
+  // Reasonable range: > -2 kg & < 150 kg so sensor readings (e.g. pantry 4015) are accepted.
   // ---------------------------
   const STOCK_PARAMS = {
     reasonableMin: -2,
@@ -1101,7 +1097,7 @@
     if (n === null || !isWeightInReasonableRange(n)) return null;
     if (n <= STOCK_PARAMS.low_weight) return { level: 'low', label: 'Low Stock', cls: 'low' };
     if (n < STOCK_PARAMS.high_weight) return { level: 'medium', label: 'Medium Stock', cls: 'medium' };
-    return { level: 'high', label: 'In Stock', cls: 'high' };
+    return { level: 'high', label: 'High Stock', cls: 'high' };
   }
 
   /**
@@ -1649,8 +1645,7 @@
   }
 
   /**
-   * Self-reported mode: estimate tot_reported_weight from donations in the last 24 hours.
-   * Cumulative: sum weight of all donations (low_donation → 2 kg, medium_donation → 10 kg, high_donation → 25 kg).
+   * Donation-based stock: only posts within 24h. Conversion: 5× Low = 1× Medium, 2× Medium = 1× High.
    * Returns { weightKg, updatedAt, source: 'donations' } or null if no donations in 24h.
    */
   API.getDonationBasedStock = async function getDonationBasedStock(pantryId) {
@@ -1659,19 +1654,25 @@
     try {
       const data = await API.getDonations(pantryId, 1, 100);
       const items = Array.isArray(data?.items) ? data.items : [];
-      const recent = items.slice().sort((a, b) => getDonationTimeMs(b) - getDonationTimeMs(a));
+      const now = Date.now();
+      const cutoff = now - DONATION_24H_MS;
+      const within24h = items.filter((d) => getDonationTimeMs(d) >= cutoff);
+      const recent = within24h.slice().sort((a, b) => getDonationTimeMs(b) - getDonationTimeMs(a));
       if (recent.length === 0) return null;
 
-      let weightKg = 0;
-      for (const d of recent) {
-        const size = (d.donationSize || '').trim();
-        const w = DONATION_WEIGHT_KG[size];
-        if (w != null && Number.isFinite(w)) weightKg += w;
-      }
+      const countLow = recent.filter((d) => (d.donationSize || '') === 'low_donation').length;
+      const countMedium = recent.filter((d) => (d.donationSize || '') === 'medium_donation').length;
+      const countHigh = recent.filter((d) => (d.donationSize || '') === 'high_donation').length;
+      const totalUnits = countLow * 1 + countMedium * 5 + countHigh * 10;
+      let weightKg = null;
+      if (totalUnits >= 10) weightKg = DONATION_WEIGHT_KG.high_donation;
+      else if (totalUnits >= 5) weightKg = DONATION_WEIGHT_KG.medium_donation;
+      else if (totalUnits >= 1) weightKg = DONATION_WEIGHT_KG.low_donation;
+
       const firstTs = recent[0].createdAt ?? recent[0].created_at ?? recent[0].updatedAt ?? recent[0].timestamp;
       const updatedAt = firstTs != null && firstTs !== '' ? (typeof firstTs === 'string' ? firstTs : new Date(firstTs).toISOString()) : new Date().toISOString();
 
-      if (!Number.isFinite(weightKg) || weightKg <= 0) return null;
+      if (weightKg == null || !Number.isFinite(weightKg)) return null;
       const tsStr = typeof updatedAt === 'string' ? updatedAt : (updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt));
       return {
         weight: weightKg,
@@ -1824,7 +1825,7 @@
     return API.getWishlist(pantryId);
   };
 
-  // Stock / Telemetry priority: 1) Sensor (API telemetry/latest e.g. Beacon Hill 254 → Azure SQL);
+  // Stock / Telemetry priority: 1) Sensor (API telemetry/latest e.g. pantry 4015 → Azure SQL);
   // 2) Local device_to_pantry + pantry_data.json (within 24h); 3) Donations (last 24h). Sensor is always tried first.
   API.getTelemetryLatest = async function getTelemetryLatest(pantryId) {
     const { normalized: normalizedId } = resolvePantryId(pantryId);

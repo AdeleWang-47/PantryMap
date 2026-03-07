@@ -10,19 +10,19 @@ function getMssql(): unknown {
   }
 }
 
-/** pantryId -> device_id in Azure SQL (same as device_to_pantry reverse) */
+/** pantryId -> device_id in Azure SQL (same as device_to_pantry reverse). Hardware sensor is on pantry 4015. */
 const PANTRY_ID_TO_DEVICE: Record<string, string> = {
-  "254": "BeaconHill",
-  "p-254": "BeaconHill",
+  "4015": "BeaconHill",
+  "p-4015": "BeaconHill",
   "1": "PantryLogger",
   "p-1": "PantryLogger",
 };
 
 /**
  * Supports:
- *   GET /api/telemetry?pantryId=254&latest=true
- *   GET /api/telemetry/latest?pantryId=254
- *   GET /api/GetLatestPantry?pantryId=254  (Azure deployment alias)
+ *   GET /api/telemetry?pantryId=4015&latest=true
+ *   GET /api/telemetry/latest?pantryId=4015
+ *   GET /api/GetLatestPantry?pantryId=4015  (Azure deployment alias)
  * Returns latest telemetry for a pantry from Azure SQL when configured;
  * otherwise returns { latest: null } so the frontend can fall back to pantry_data.json.
  */
@@ -136,11 +136,11 @@ export async function getTelemetry(
       // Fallback: when Azure SQL not configured or no row, proxy to ECE_TELEMETRY_BASE_URL (e.g. Azure deployed API)
       const telemetryBaseUrl = process.env.ECE_TELEMETRY_BASE_URL?.trim();
       if (telemetryBaseUrl) {
-        try {
-          const base = telemetryBaseUrl.replace(/\/$/, "");
-          const proxyUrl = `${base}/GetLatestPantry?pantryId=${encodeURIComponent(pantryId)}`;
-          const res = await fetch(proxyUrl);
-          if (res.ok) {
+        const base = telemetryBaseUrl.replace(/\/$/, "");
+        const tryEce = async (url: string): Promise<{ weightKg?: number; timestamp?: string } | null> => {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) return null;
             const data = (await res.json()) as Record<string, unknown>;
             const rawWeight = data.weight ?? data.weightKg;
             const weightKg =
@@ -159,28 +159,38 @@ export async function getTelemetry(
                     ? String(data.timestamp)
                     : undefined;
             if (numWeight != null && timestamp != null) {
-              return {
-                status: 200,
-                headers: {
-                  "Content-Type": "application/json",
-                  ...corsHeaders(origin),
-                },
-                body: JSON.stringify({
-                  latest: {
-                    weightKg: Math.round(numWeight * 100) / 100,
-                    weight: numWeight,
-                    timestamp,
-                    updatedAt: timestamp,
-                  },
-                }),
-              };
+              return { weightKg: numWeight, timestamp };
             }
+          } catch (e) {
+            context.log("ECE fetch error:", e instanceof Error ? e.message : String(e));
           }
-        } catch (fetchErr: unknown) {
-          context.log(
-            "ECE_TELEMETRY_BASE_URL fetch error:",
-            fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
-          );
+          return null;
+        };
+        // Try pantryId first (e.g. GetLatestPantry?pantryId=4015)
+        let result = await tryEce(`${base}/GetLatestPantry?pantryId=${encodeURIComponent(pantryId)}`);
+        // If upstream only knows device (e.g. still keyed by 254 or deviceId), try by deviceId when we have a mapping
+        if (result == null && deviceId !== pantryId) {
+          result = await tryEce(`${base}/GetLatestPantry?deviceId=${encodeURIComponent(deviceId)}`);
+          if (result == null) {
+            result = await tryEce(`${base}/GetLatestPantry?pantryId=${encodeURIComponent(deviceId)}`);
+          }
+        }
+        if (result != null) {
+          return {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              ...corsHeaders(origin),
+            },
+            body: JSON.stringify({
+              latest: {
+                weightKg: Math.round(result.weightKg! * 100) / 100,
+                weight: result.weightKg,
+                timestamp: result.timestamp,
+                updatedAt: result.timestamp,
+              },
+            }),
+          };
         }
       }
 
@@ -213,7 +223,7 @@ export async function getTelemetry(
   }
 }
 
-// /api/telemetry/latest?pantryId=254 (and /api/telemetry?pantryId=254&latest=true)
+// /api/telemetry/latest?pantryId=4015 (and /api/telemetry?pantryId=4015&latest=true)
 app.http("telemetryLatest", {
   route: "telemetry/latest",
   methods: ["GET", "OPTIONS"],
@@ -221,7 +231,7 @@ app.http("telemetryLatest", {
   handler: getTelemetry,
 });
 
-// /api/telemetry?pantryId=254&latest=true (same handler, different route for backward compat)
+// /api/telemetry?pantryId=4015&latest=true (same handler, different route for backward compat)
 app.http("telemetry", {
   route: "telemetry",
   methods: ["GET", "OPTIONS"],
@@ -229,7 +239,7 @@ app.http("telemetry", {
   handler: getTelemetry,
 });
 
-// /api/GetLatestPantry?pantryId=254 (Azure deployment alias)
+// /api/GetLatestPantry?pantryId=4015 (Azure deployment alias)
 app.http("getLatestPantry", {
   route: "GetLatestPantry",
   methods: ["GET", "OPTIONS"],

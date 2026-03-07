@@ -330,12 +330,12 @@ async function initDetailView(pantry) {
   }
   if (typeof window._initSettingsSection === 'function') window._initSettingsSection(pantry);
 
-  // Load sensor data: prefer real-time API (getTelemetryLatest e.g. 254), then pantry_data.json, then CSV fallback
+  // Load sensor data: prefer real-time API (getTelemetryLatest e.g. 4015), then pantry_data.json, then CSV fallback
   if (window._pantryDataRefreshInterval) {
     clearInterval(window._pantryDataRefreshInterval);
     window._pantryDataRefreshInterval = null;
   }
-  // 1) 优先用实时 telemetry API（Beacon Hill 254 等）更新传感器重量
+  // 1) 优先用实时 telemetry API（pantry 4015 等）更新传感器重量
   if (typeof window._applyTelemetryLatestToPantry === 'function') {
     try {
       await window._applyTelemetryLatestToPantry(pantry.id);

@@ -148,16 +148,16 @@
 
   function stockLabelFromLevel(level) {
     const l = String(level || '').toLowerCase().trim();
-    if (l === 'high') return 'High';
-    if (l === 'medium') return 'Medium';
-    if (l === 'low') return 'Low';
+    if (l === 'high') return 'High Stock';
+    if (l === 'medium') return 'Medium Stock';
+    if (l === 'low') return 'Low Stock';
     return 'Unknown';
   }
 
   function stockDescriptionFromLabel(label) {
-    if (label === 'Low') return 'Only a few items reported in the pantry.';
-    if (label === 'Medium') return 'About a bag of items reported in the pantry';
-    if (label === 'High') return 'More than a bag of items reported in the pantry.';
+    if (label === 'Low' || label === 'Low Stock') return 'Only a few items reported in the pantry.';
+    if (label === 'Medium' || label === 'Medium Stock') return 'About a bag of items reported in the pantry';
+    if (label === 'High' || label === 'High Stock') return 'More than a bag of items reported in the pantry.';
     return 'No stock level updates reported in the past 48 hours';
   }
 
@@ -211,11 +211,17 @@
   }
 
   /**
-   * Normalize stock information for a pantry using the same priority as the detail view:
-   * 1) Sensor (API telemetry/latest or local fallback within 24h)
-   * 2) Self‑reported donations within 24h
-   * If neither provides a usable weight, stock level is treated as Unknown.
-   * Result is written back onto the pantry object so list + detail can share it.
+   * Stock level display rule (applies in two places):
+   * 1) Map dashboard pantry list cards — each card shows stock from this resolution.
+   * 2) Pantry detail page — Stock level section shows the same.
+   *
+   * Resolution order:
+   * - If hardware sensor data is available, valid (weight in range), and updated within 24h, use it.
+   *   (Sensor has no local backup; if no update in 24h, treat as no sensor and use donation.)
+   * - Otherwise use donation-post-based stock (only 24h posts; 5× Low = 1× Medium, 2× Medium = 1× High).
+   * - If neither is available/valid, show Unknown.
+   *
+   * Labels: "Low Stock", "Medium Stock", "High Stock", "Unknown" (same on list cards and detail).
    */
   async function hydratePantryStock(pantry) {
     if (!pantry || !pantry.id || !window.PantryAPI) return null;
@@ -254,9 +260,14 @@
 
     let lastUpdateIso = null;
     let lastUpdateSource = null;
+    // Sensor has no local backup: if no update in 24h, treat as no sensor data (use donation note).
+    const SENSOR_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+    const sensorWithin24h = sensorMs != null && (Date.now() - sensorMs) <= SENSOR_MAX_AGE_MS;
+    // Rule: hardware sensor first (and within 24h); only if missing/invalid/expired use donation-post.
     const hasUsableSensor =
       sensorish &&
       sensorWeightKg != null &&
+      sensorWithin24h &&
       typeof window.PantryAPI.isWeightInReasonableRange === 'function' &&
       window.PantryAPI.isWeightInReasonableRange(sensorWeightKg);
     if (hasUsableSensor) {
@@ -287,11 +298,14 @@
       pantry.stockLevelUpdatedAt = lastUpdateIso || null;
       pantry.stockLevelSource = lastUpdateSource || null;
     } else {
-      pantry.stockLevel = stockLabelFromLevel('unknown');
-      pantry.stockLevelCls = 'unknown';
-      pantry.stockLevelWeightKg = null;
-      pantry.stockLevelUpdatedAt = lastUpdateIso || null;
-      pantry.stockLevelSource = lastUpdateSource || null;
+      // Prefer last-known value: do not overwrite with Unknown when new request has no data (avoids long loading).
+      if (pantry.stockLevel == null || pantry.stockLevelCls == null) {
+        pantry.stockLevel = stockLabelFromLevel('unknown');
+        pantry.stockLevelCls = 'unknown';
+        pantry.stockLevelWeightKg = null;
+      }
+      pantry.stockLevelUpdatedAt = lastUpdateIso ?? pantry.stockLevelUpdatedAt ?? null;
+      pantry.stockLevelSource = lastUpdateSource ?? pantry.stockLevelSource ?? null;
     }
 
     pantry._stockHydrated = true;
@@ -309,6 +323,8 @@
     const stockSection = document.querySelector('.stock-section .stock-card');
     if (!stockSection || !window.PantryAPI) return;
 
+    // Force fresh telemetry when opening detail so sensor data is always requested (avoids cache from list hydration).
+    delete pantry._stockHydrated;
     const stockModel = await hydratePantryStock(pantry);
     const level = stockModel?.level || pantry.stockLevelCls || 'unknown';
     const lastUpdateIso = stockModel?.lastUpdateIso || pantry.stockLevelUpdatedAt || null;
@@ -565,11 +581,12 @@
     const detailsPanel = document.getElementById('details');
     const detailsContent = document.getElementById('detailsContent');
     detailsPanel.classList.remove('hidden');
+    // Show list immediately with last-known stock (from API or previous hydration); avoid loading state.
     detailsContent.innerHTML = renderPantryList(inView);
     attachImageFallbacks(detailsContent);
     updateCollapseButton(false);
     
-    // Kick off background hydration so list summary matches detail view once telemetry/donations load.
+    // Hydrate stock in background; update each card when new result arrives (stale-while-revalidate).
     inView.slice(0, 50).forEach(pantry => {
       hydratePantryStock(pantry)
         .then(() => {
@@ -646,13 +663,16 @@
       : 0;
   }
 
+  /**
+   * Badge for list card (and detail when syncing). Uses the same rule: sensor first, then donation.
+   * Prefer values set by hydratePantryStock (sensor → donation resolution).
+   */
   function getStockBadge(pantry) {
-    // 1) If PantryAPI already normalized a stock level for this pantry, reuse it as‑is.
     if (pantry.stockLevel && pantry.stockLevelCls) {
       return { label: pantry.stockLevel, cls: pantry.stockLevelCls };
     }
 
-    // 2) Otherwise, try to derive from a weight signal (sensor / donations).
+    // Derive from weight already on pantry (sensor or donation, per hydratePantryStock).
     const rawWeight =
       pantry.stockLevelWeightKg != null ? pantry.stockLevelWeightKg
         : (pantry.sensors && pantry.sensors.weightKg != null ? pantry.sensors.weightKg : null);
@@ -677,7 +697,7 @@
     if (totalItems > 0) {
       if (totalItems <= 10) return { label: 'Low Stock', cls: 'low' };
       if (totalItems <= 30) return { label: 'Medium Stock', cls: 'medium' };
-      return { label: 'In Stock', cls: 'high' };
+      return { label: 'High Stock', cls: 'high' };
     }
 
     // No signals at all.
@@ -703,7 +723,7 @@
     const addrLine = (p.address || '').trim();
     const photo = (p.photos && p.photos[0]) || null;
 
-    // Prefer normalized stock info from PantryAPI so summary matches detail view.
+    // Stock badge: sensor-first then donation (getStockBadge uses pantry fields set by hydratePantryStock).
     const badge = getStockBadge(p);
 
     // Only show "Last update: …" when we actually have a meaningful stock reading.
@@ -805,27 +825,186 @@
     updateStockCardForPantry(pantry).catch(function () {});
   }
 
-  // Show pantry details in side panel
+  /** Compute donation-based stock from items (24h only; 5× Low = 1× Medium, 2× Medium = 1× High). Same rule as API. */
+  function computeDonationStockFromItems(items) {
+    if (!Array.isArray(items) || items.length === 0) return null;
+    const now = Date.now();
+    const cutoff = now - (24 * 60 * 60 * 1000);
+    const getMs = (d) => {
+      const raw = d.createdAt ?? d.created_at ?? d.timestamp ?? d.updatedAt;
+      if (raw == null || raw === '') return now;
+      const t = new Date(raw).getTime();
+      return Number.isFinite(t) ? t : now;
+    };
+    const within24h = items.filter((d) => getMs(d) >= cutoff);
+    if (within24h.length === 0) return null;
+    const countLow = within24h.filter((d) => (d.donationSize || '') === 'low_donation').length;
+    const countMedium = within24h.filter((d) => (d.donationSize || '') === 'medium_donation').length;
+    const countHigh = within24h.filter((d) => (d.donationSize || '') === 'high_donation').length;
+    const totalUnits = countLow * 1 + countMedium * 5 + countHigh * 10;
+    const DONATION_WEIGHT_KG = { low_donation: 2, medium_donation: 10, high_donation: 25 };
+    let weightKg = null;
+    if (totalUnits >= 10) weightKg = DONATION_WEIGHT_KG.high_donation;
+    else if (totalUnits >= 5) weightKg = DONATION_WEIGHT_KG.medium_donation;
+    else if (totalUnits >= 1) weightKg = DONATION_WEIGHT_KG.low_donation;
+    if (weightKg == null || !Number.isFinite(weightKg)) return null;
+    const first = within24h[0];
+    const firstTs = first.createdAt ?? first.created_at ?? first.updatedAt ?? first.timestamp;
+    const updatedAt = firstTs != null && firstTs !== '' ? (typeof firstTs === 'string' ? firstTs : new Date(firstTs).toISOString()) : new Date().toISOString();
+    return { weightKg, updatedAt, source: 'donations' };
+  }
+
+  /** Update stock section from pre-fetched telemetry + donations (sensor first, then donation). Avoids extra getDonations. */
+  function updateStockSectionFromTelemetryAndDonations(pantry, telemetry, donationsData) {
+    const stockSection = document.querySelector('.stock-section .stock-card');
+    if (!stockSection || !window.PantryAPI) return;
+    const items = Array.isArray(donationsData?.items) ? donationsData.items : [];
+    const donationStock = computeDonationStockFromItems(items);
+    const sensorish = telemetry && (telemetry.source === 'sensor' || telemetry.source === 'fallback_local');
+    const sensorWeightKg = sensorish ? (telemetry.weightKg ?? telemetry.weight) : null;
+    const sensorUpdatedAt = sensorish ? (telemetry.updatedAt ?? telemetry.timestamp) : null;
+    const donationWeightKg = donationStock && donationStock.weightKg != null ? Number(donationStock.weightKg) : null;
+    const donationUpdatedAt = donationStock ? donationStock.updatedAt : null;
+    const sensorMs = parseTimestampMs(sensorUpdatedAt);
+    const donationMs = parseTimestampMs(donationUpdatedAt);
+    const SENSOR_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+    const sensorWithin24h = sensorMs != null && (Date.now() - sensorMs) <= SENSOR_MAX_AGE_MS;
+    const hasUsableSensor = sensorish && sensorWeightKg != null && sensorWithin24h && window.PantryAPI.isWeightInReasonableRange(sensorWeightKg);
+    let lastUpdateIso = null;
+    let lastUpdateSource = null;
+    let weightForLevelKg = null;
+    if (hasUsableSensor) {
+      lastUpdateIso = sensorUpdatedAt;
+      lastUpdateSource = 'sensor';
+      weightForLevelKg = sensorWeightKg;
+    } else if (donationWeightKg != null && window.PantryAPI.isWeightInReasonableRange(donationWeightKg)) {
+      lastUpdateIso = donationUpdatedAt;
+      lastUpdateSource = 'self';
+      weightForLevelKg = donationWeightKg;
+    } else if (donationMs != null) {
+      lastUpdateIso = donationUpdatedAt;
+      lastUpdateSource = 'self';
+    } else if (sensorMs != null) {
+      lastUpdateIso = sensorUpdatedAt;
+      lastUpdateSource = 'sensor';
+    }
+    let level = 'unknown';
+    if (weightForLevelKg != null && typeof window.PantryAPI.computeStockLevelFromWeight === 'function') {
+      const badge = window.PantryAPI.computeStockLevelFromWeight(weightForLevelKg);
+      if (badge?.level) level = badge.level;
+      pantry.stockLevel = badge.label || stockLabelFromLevel(badge.level);
+      pantry.stockLevelCls = badge.cls || badge.level || 'unknown';
+      pantry.stockLevelWeightKg = weightForLevelKg;
+      pantry.stockLevelUpdatedAt = lastUpdateIso || null;
+      pantry.stockLevelSource = lastUpdateSource || null;
+    } else {
+      pantry.stockLevel = stockLabelFromLevel('unknown');
+      pantry.stockLevelCls = 'unknown';
+      pantry.stockLevelWeightKg = null;
+      pantry.stockLevelUpdatedAt = lastUpdateIso || null;
+      pantry.stockLevelSource = lastUpdateSource || null;
+    }
+    const sensorWeightKgForDisplay = lastUpdateSource === 'sensor' ? sensorWeightKg : null;
+    stockSection.innerHTML = renderStockCardInnerHtml({
+      level,
+      lastUpdateIso,
+      lastUpdateSource,
+      sensorWeightKg: sensorWeightKgForDisplay,
+      noUpdateAvailable: !lastUpdateIso,
+    });
+  }
+
+  function loadDonorNotesWithData(pantry, data) {
+    if (!pantry || !pantry.id || !donorNotesState.root) return;
+    const container = donorNotesState.root;
+    const allItems = Array.isArray(data?.items) ? data.items : [];
+    const now = Date.now();
+    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+    const getDonationTimeMs = (item) => {
+      const raw = item.createdAt ?? item.created_at ?? item.timestamp;
+      if (raw == null || raw === '') return now;
+      const t = new Date(raw).getTime();
+      return Number.isFinite(t) ? t : now;
+    };
+    const recentItems = allItems.filter(item => getDonationTimeMs(item) >= twentyFourHoursAgo);
+    donorNotesState.items = recentItems;
+    donorNotesState.pantryId = String(pantry.id);
+    donorNotesState.expanded = false;
+    renderDonorNotes();
+    updateStockLevelFromDonations(pantry, recentItems);
+  }
+
+  function loadWishlistWithData(pantry, grid, data) {
+    if (!grid) return;
+    let items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+    if ((!items || items.length === 0) && Array.isArray(pantry.wishlist) && pantry.wishlist.length) {
+      items = pantry.wishlist.map((name, idx) => ({
+        id: `legacy-${idx}`,
+        itemDisplay: name,
+        count: 1,
+        updatedAt: null
+      }));
+    }
+    const normalized = normalizeWishlistItems(items);
+    wishlistState.items = normalized;
+    wishlistState.pantryId = pantry.id;
+    wishlistState.root = grid;
+    grid.__items = normalized;
+    renderWishlistItems(grid, normalized);
+  }
+
+  function loadMessagesWithData(pantry, list, data) {
+    if (!list || !messageState.root) return;
+    const items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+    messageState.items = items;
+    messageState.expanded = false;
+    messageState.pantryId = String(pantry.id);
+    renderMessages();
+  }
+
+  // Show pantry details in side panel — one parallel fetch per pantry (donations, wishlist, messages, telemetry); reuse donations for stock.
   function showPantryDetails(pantry) {
     currentPantry = pantry;
     
-    // Update details content
     const detailsContent = document.getElementById('detailsContent');
     detailsContent.innerHTML = renderPantryDetails(pantry);
-    // Ensure images gracefully fallback
     attachImageFallbacks(detailsContent);
-    // Initialize carousel if present
     setupCarousel(detailsContent);
-    bindDonorNotesModule(detailsContent, pantry);
-    bindWishlistModule(detailsContent, pantry);
-    bindMessageModule(detailsContent, pantry);
-    refreshStockSectionForPantry(pantry);
+    bindDonorNotesModule(detailsContent, pantry, { skipInitialLoad: true });
+    bindWishlistModule(detailsContent, pantry, { skipInitialLoad: true });
+    bindMessageModule(detailsContent, pantry, { skipInitialLoad: true });
     
-    // Show details panel
     const detailsPanel = document.getElementById('details');
     detailsPanel.classList.remove('hidden');
     detailsPanel.classList.remove('collapsed');
     updateCollapseButton(false);
+    
+    const pid = pantry.id;
+    Promise.all([
+      window.PantryAPI.getDonations(pid, 1, 100),
+      window.PantryAPI.getWishlist(pid),
+      window.PantryAPI.getMessages(pid),
+      window.PantryAPI.getTelemetryLatest(pid),
+    ]).then(function (results) {
+      if (currentPantry !== pantry) return;
+      const donationsData = results[0];
+      const wishlistData = results[1];
+      const messagesData = results[2];
+      const telemetryData = results[3];
+      const latestEl = detailsContent.querySelector('[data-donor-notes-latest]');
+      const grid = detailsContent.querySelector('[data-wishlist-grid]');
+      const list = detailsContent.querySelector('[data-message-list]');
+      if (latestEl) {
+        if (donationsData != null) loadDonorNotesWithData(pantry, donationsData);
+        else { donorNotesState.items = []; donorNotesState.pantryId = String(pantry.id); renderDonorNotes(); }
+      }
+      if (grid) loadWishlistWithData(pantry, grid, wishlistData);
+      if (list) loadMessagesWithData(pantry, list, messagesData);
+      updateStockSectionFromTelemetryAndDonations(pantry, telemetryData, donationsData);
+    }).catch(function (err) {
+      console.warn('Detail load failed', err);
+      refreshStockSectionForPantry(pantry);
+    });
     
     // Pan/zoom map so selected pin is centered in the map area
     const marker = markers.get(pantry.id);
@@ -892,6 +1071,7 @@
       </div>
 
       <section class="detail-section stock-section">
+        <!-- Stock level: same rule as list cards — hardware sensor first, else donation-post; updated by updateStockCardForPantry -->
         <div class="stock-card">
           ${renderStockCardInnerHtml({
             level: initialUpdatedAt ? initialLevel : 'unknown',
@@ -1042,7 +1222,7 @@
     }
   }
 
-  // Load latest weight from pantry_data.json (device_to_pantry + scale1..4) for hardware pantry e.g. 254
+  // Load latest weight from pantry_data.json (device_to_pantry + scale1..4) for hardware pantry e.g. 4015
   async function loadStockFromPantryDataJson(pantryId) {
     try {
       const pid = String(pantryId || '');
@@ -1087,9 +1267,9 @@
     if (weightKg != null && window.PantryAPI && typeof window.PantryAPI.isWeightInReasonableRange === 'function' && window.PantryAPI.isWeightInReasonableRange(weightKg)) {
       return;
     }
-    // Pantry 254 (Beacon Hill) uses hardware telemetry; don't overwrite with "Lack of donation information"
+    // Pantry 4015 has hardware telemetry; don't overwrite with "Lack of donation information"
     const pantryIdStr = String(pantry.id || '');
-    if (pantryIdStr === '254' || pantryIdStr === 'p-254') {
+    if (pantryIdStr === '4015' || pantryIdStr === 'p-4015') {
       return;
     }
     
@@ -1430,7 +1610,7 @@
     });
   }
 
-  function bindDonorNotesModule(root, pantry) {
+  function bindDonorNotesModule(root, pantry, options) {
     if (!root || !pantry || !pantry.id) return;
     const latestEl = root.querySelector('[data-donor-notes-latest]');
     const addBtn = root.querySelector('[data-donor-note-add]');
@@ -1452,10 +1632,10 @@
       };
     }
     
-    loadDonorNotes(pantry);
+    if (!(options && options.skipInitialLoad)) loadDonorNotes(pantry);
   }
 
-  function bindWishlistModule(root, pantry) {
+  function bindWishlistModule(root, pantry, options) {
     if (!root || !pantry || !pantry.id) return;
     const grid = root.querySelector('[data-wishlist-grid]');
     const addBtn = root.querySelector('[data-wishlist-add]');
@@ -1463,7 +1643,7 @@
 
     const refresh = () => loadWishlist(pantry, grid);
     addBtn.onclick = () => openWishlistModal(pantry, refresh);
-    refresh();
+    if (!(options && options.skipInitialLoad)) refresh();
   }
 
   function normalizeWishlistItems(rawItems = []) {
@@ -1713,7 +1893,7 @@
     }
   }
 
-  function bindMessageModule(root, pantry) {
+  function bindMessageModule(root, pantry, options) {
     if (!root || !pantry || !pantry.id) return;
     const list = root.querySelector('[data-message-list]');
     const addBtn = root.querySelector('[data-message-add]');
@@ -1732,7 +1912,7 @@
       };
     }
 
-    loadMessages(pantry);
+    if (!(options && options.skipInitialLoad)) loadMessages(pantry);
   }
 
   function openWishlistModal(pantry, onSuccess) {
@@ -2108,16 +2288,16 @@
 
   function stockLabelFromLevel(level) {
     const l = String(level || '').toLowerCase().trim();
-    if (l === 'high') return 'High';
-    if (l === 'medium') return 'Medium';
-    if (l === 'low') return 'Low';
+    if (l === 'high') return 'High Stock';
+    if (l === 'medium') return 'Medium Stock';
+    if (l === 'low') return 'Low Stock';
     return 'Unknown';
   }
 
   function stockDescriptionFromLabel(label) {
-    if (label === 'Low') return 'Only a few items reported in the pantry.';
-    if (label === 'Medium') return 'About a bag of items reported in the pantry';
-    if (label === 'High') return 'More than a bag of items reported in the pantry.';
+    if (label === 'Low' || label === 'Low Stock') return 'Only a few items reported in the pantry.';
+    if (label === 'Medium' || label === 'Medium Stock') return 'About a bag of items reported in the pantry';
+    if (label === 'High' || label === 'High Stock') return 'More than a bag of items reported in the pantry.';
     return 'No stock level updates reported in the past 48 hours';
   }
 
@@ -2203,11 +2383,12 @@
 
     let lastUpdateIso = null;
     let lastUpdateSource = null;
-    // Priority (keep previous logic): if pantry has usable sensor connection, sensor wins.
-    // Donations/self-report only used when sensor data is unavailable/unusable.
+    const SENSOR_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+    const sensorWithin24h = sensorMs != null && (Date.now() - sensorMs) <= SENSOR_MAX_AGE_MS;
     const hasUsableSensor =
       sensorish &&
       sensorWeightKg != null &&
+      sensorWithin24h &&
       typeof window.PantryAPI.isWeightInReasonableRange === 'function' &&
       window.PantryAPI.isWeightInReasonableRange(sensorWeightKg);
     if (hasUsableSensor) {
@@ -2217,7 +2398,6 @@
       lastUpdateIso = donationUpdatedAt;
       lastUpdateSource = 'self';
     } else if (sensorMs != null) {
-      // If we have a sensor timestamp but no usable weight, still surface the update time.
       lastUpdateIso = sensorUpdatedAt;
       lastUpdateSource = 'sensor';
     }
@@ -2514,7 +2694,7 @@
   function getStockBadge(total) {
     if (total <= 10) return { label: 'Low Stock', cls: 'low' };
     if (total <= 30) return { label: 'Medium Stock', cls: 'medium' };
-    return { label: 'In Stock', cls: 'high' };
+    return { label: 'High Stock', cls: 'high' };
   }
 
   function formatRelativeDays(iso) {
@@ -2967,7 +3147,7 @@
     }
   }
 
-  // Load latest weight from pantry_data.json (device_to_pantry + scale1..4) for hardware pantry e.g. 254
+  // Load latest weight from pantry_data.json (device_to_pantry + scale1..4) for hardware pantry e.g. 4015
   async function loadStockFromPantryDataJson(pantryId) {
     try {
       const pid = String(pantryId || '');
@@ -3012,9 +3192,9 @@
     if (weightKg != null && window.PantryAPI && typeof window.PantryAPI.isWeightInReasonableRange === 'function' && window.PantryAPI.isWeightInReasonableRange(weightKg)) {
       return;
     }
-    // Pantry 254 (Beacon Hill) uses hardware telemetry; don't overwrite with "Lack of donation information"
+    // Pantry 4015 has hardware telemetry; don't overwrite with "Lack of donation information"
     const pantryIdStr = String(pantry.id || '');
-    if (pantryIdStr === '254' || pantryIdStr === 'p-254') {
+    if (pantryIdStr === '4015' || pantryIdStr === 'p-4015') {
       return;
     }
     
@@ -3339,7 +3519,7 @@
     });
   }
 
-  function bindDonorNotesModule(root, pantry) {
+  function bindDonorNotesModule(root, pantry, options) {
     if (!root || !pantry || !pantry.id) return;
     const latestEl = root.querySelector('[data-donor-notes-latest]');
     const addBtn = root.querySelector('[data-donor-note-add]');
@@ -3361,10 +3541,10 @@
       };
     }
     
-    loadDonorNotes(pantry);
+    if (!(options && options.skipInitialLoad)) loadDonorNotes(pantry);
   }
 
-  function bindWishlistModule(root, pantry) {
+  function bindWishlistModule(root, pantry, options) {
     if (!root || !pantry || !pantry.id) return;
     const grid = root.querySelector('[data-wishlist-grid]');
     const addBtn = root.querySelector('[data-wishlist-add]');
@@ -3372,7 +3552,7 @@
 
     const refresh = () => loadWishlist(pantry, grid);
     addBtn.onclick = () => openWishlistModal(pantry, refresh);
-    refresh();
+    if (!(options && options.skipInitialLoad)) refresh();
   }
 
   function normalizeWishlistItems(rawItems = []) {
@@ -3622,7 +3802,7 @@
     }
   }
 
-  function bindMessageModule(root, pantry) {
+  function bindMessageModule(root, pantry, options) {
     if (!root || !pantry || !pantry.id) return;
     const list = root.querySelector('[data-message-list]');
     const addBtn = root.querySelector('[data-message-add]');
@@ -3641,7 +3821,7 @@
       };
     }
 
-    loadMessages(pantry);
+    if (!(options && options.skipInitialLoad)) loadMessages(pantry);
   }
 
   function openWishlistModal(pantry, onSuccess) {
