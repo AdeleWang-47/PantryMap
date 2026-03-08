@@ -194,13 +194,14 @@ nav a { text-decoration: none; }
   margin-top: 48px; 
   overflow-y: auto; 
   height: calc(100% - 48px); 
+  padding-left: 46px;
   padding-right: 8px; 
   width: 100%;
   overflow-x: hidden;
 }
 .detail-hero {
   background: var(--panel);
-  border-radius: 28px;
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: none;
   outline: 1pt solid rgba(148, 163, 184, 0.35);
@@ -322,7 +323,7 @@ nav a { text-decoration: none; }
 }
 .stock-card {
   background: var(--panel);
-  border-radius: 24px;
+  border-radius: 16px;
   padding: 24px;
   border: none;
   box-shadow: none;
@@ -347,6 +348,11 @@ nav a { text-decoration: none; }
   font-size: 14px;
   line-height: 1.35;
 }
+.stock-info-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+}
 .stock-info-btn {
   flex-shrink: 0;
   width: 28px;
@@ -366,6 +372,33 @@ nav a { text-decoration: none; }
 .stock-info-btn:hover {
   background: rgba(148, 163, 184, 0.12);
 }
+.stock-info-img {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 6px;
+  max-width: min(67.5vw, 315px);
+  width: auto;
+  height: auto;
+  max-height: 52.5vh;
+  object-fit: contain;
+  z-index: 1000;
+  pointer-events: none;
+}
+.stock-info-wrap:hover .stock-info-img {
+  display: block;
+}
+/* Extend hover zone so image stays visible when moving mouse onto it */
+.stock-info-wrap:hover::after {
+  content: '';
+  position: absolute;
+  left: -60px;
+  right: -60px;
+  top: 0;
+  bottom: -320px;
+  z-index: 999;
+}
 .stock-meta {
   margin-top: 10px;
   color: var(--muted);
@@ -379,7 +412,7 @@ nav a { text-decoration: none; }
 /* Shared card style for detail sections (wishlist) */
 .detail-card-section {
   background: var(--panel);
-  border-radius: 24px;
+  border-radius: 16px;
   padding: 24px;
   border: none;
   box-shadow: none;

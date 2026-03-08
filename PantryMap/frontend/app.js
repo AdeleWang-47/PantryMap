@@ -200,7 +200,10 @@
           <h2>Stock level</h2>
           <div class="stock-card-desc">${description}</div>
         </div>
-        <button class="stock-info-btn" type="button" aria-label="Stock level info" data-stock-info title="Stock level info">i</button>
+        <span class="stock-info-wrap" title="Stock level info">
+          <button class="stock-info-btn" type="button" aria-label="Stock level info" data-stock-info>i</button>
+          <img class="stock-info-img" src="info.png" alt="Stock level algorithm explanation" />
+        </span>
       </div>
       ${renderStockGauge(0, 40, level)}
       <div class="stock-meta">
@@ -1159,7 +1162,6 @@
         const infoBtn = e.target && e.target.closest ? e.target.closest('[data-stock-info]') : null;
         if (infoBtn) {
           e.preventDefault();
-          alert(getStockInfoHelpText());
           return;
         }
         const target = e.target.closest('.list-item');
@@ -2342,7 +2344,10 @@
           <h2>Stock level</h2>
           <div class="stock-card-desc">${description}</div>
         </div>
-        <button class="stock-info-btn" type="button" aria-label="Stock level info" data-stock-info title="Stock level info">i</button>
+        <span class="stock-info-wrap" title="Stock level info">
+          <button class="stock-info-btn" type="button" aria-label="Stock level info" data-stock-info>i</button>
+          <img class="stock-info-img" src="info.png" alt="Stock level algorithm explanation" />
+        </span>
       </div>
       ${renderStockGauge(0, 40, level)}
       <div class="stock-meta">
@@ -3084,7 +3089,6 @@
         const infoBtn = e.target && e.target.closest ? e.target.closest('[data-stock-info]') : null;
         if (infoBtn) {
           e.preventDefault();
-          alert(getStockInfoHelpText());
           return;
         }
         const target = e.target.closest('.list-item');
