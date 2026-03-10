@@ -313,8 +313,7 @@ export default function AboutUsClient({ initialTab }: AboutUsClientProps) {
                         Click on a pantry, and check if it is running low on stock
                       </li>
                       <li>
-                        Leave a donation! Note that pantries with the{" "}
-                        <WifiBadgeIcon /> symbol will automatically update the stock level!
+                        Leave a donation!
                       </li>
                       <li>
                         By clicking “report a donation” on a pantry page, you can let your neighbors know what you donated and take a picture!
@@ -332,8 +331,7 @@ export default function AboutUsClient({ initialTab }: AboutUsClientProps) {
                         Find a pantry near you through the LIVE MAP
                       </li>
                       <li>
-                        Click on a pantry, and check if someone donated recently, or the pantry has medium to high stock level. Note that pantries with the{" "}
-                        <WifiBadgeIcon /> symbol will automatically update the stock level when someone donate!
+                        Click on a pantry, and check if someone donated recently.
                       </li>
                       <li>
                         Not finding what you want? Add items you need in to pantry page wishlist
