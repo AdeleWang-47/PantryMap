@@ -475,6 +475,69 @@ export async function fetchRecentDonations(
   }
 }
 
+// Donation weight mapping: legacy DONATION_WEIGHT_KG
+const DONATION_WEIGHT_KG: Record<string, number> = {
+  low_donation: 2,
+  medium_donation: 10,
+  high_donation: 25,
+};
+const DONATION_24H_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Compute a live StockInfo from self-reported donations within the last 24 h.
+ * Mirrors legacy getDonationBasedStock: 5× Low = 1× Medium, 2× Medium = 1× High.
+ * Returns null when there are no recent donations or totals are zero.
+ */
+export async function getDonationBasedStock(
+  pantryId: string,
+): Promise<StockInfo | null> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    const normalizedId = String(pantryId).replace(/^p-/i, "");
+    const url = `${baseUrl.replace(/\/+$/, "")}/donations?pantryId=${encodeURIComponent(normalizedId)}&page=1&pageSize=100`;
+    const data = await fetchJson<DonationListResponse>(url);
+    const items: Donation[] = Array.isArray(data?.items) ? data.items : [];
+
+    const now = Date.now();
+    const cutoff = now - DONATION_24H_MS;
+    const recent = items
+      .filter((d) => getDonationTimeMs(d) >= cutoff)
+      .sort((a, b) => getDonationTimeMs(b) - getDonationTimeMs(a));
+
+    if (recent.length === 0) return null;
+
+    const countLow = recent.filter((d) => d.donationSize === "low_donation").length;
+    const countMedium = recent.filter((d) => d.donationSize === "medium_donation").length;
+    const countHigh = recent.filter((d) => d.donationSize === "high_donation").length;
+    // 5× Low = 1× Medium (5 units); 2× Medium = 1× High (10 units)
+    const totalUnits = countLow * 1 + countMedium * 5 + countHigh * 10;
+
+    let weightKg: number | null = null;
+    if (totalUnits >= 10) weightKg = DONATION_WEIGHT_KG.high_donation;
+    else if (totalUnits >= 5) weightKg = DONATION_WEIGHT_KG.medium_donation;
+    else if (totalUnits >= 1) weightKg = DONATION_WEIGHT_KG.low_donation;
+
+    if (weightKg === null) return null;
+
+    const badge = computeStockLevelFromWeight(weightKg);
+    if (!badge) return null;
+
+    const first = recent[0];
+    const rawTs = first.createdAt ?? first.created_at ?? first.updatedAt ?? first.timestamp ?? null;
+    const lastUpdateIso = rawTs != null ? (typeof rawTs === "string" ? rawTs : new Date(rawTs as number).toISOString()) : new Date().toISOString();
+
+    return {
+      level: badge.level as StockInfo["level"],
+      lastUpdateIso,
+      lastUpdateSource: "self",
+      sensorWeightKg: null,
+    };
+  } catch (e) {
+    console.warn("getDonationBasedStock failed", e);
+    return null;
+  }
+}
+
 // -------- Wishlist --------
 
 export interface WishlistItem {

@@ -15,6 +15,7 @@ import {
   type MessageItem,
   postMessage,
   fetchLiveTelemetryStock,
+  getDonationBasedStock,
 } from "@/lib/pantry-api";
 
 /* ─── constants ───────────────────────────────────────────────── */
@@ -439,8 +440,15 @@ export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry }) => {
   const [liveStock, setLiveStock] = useState<StockInfo | null>(null);
   useEffect(() => {
     setLiveStock(null);
-    fetchLiveTelemetryStock(pantry.id).then((s) => {
-      if (s) setLiveStock(s);
+    // Prefer sensor telemetry; fall back to donation-based stock for non-sensor pantries
+    Promise.allSettled([
+      fetchLiveTelemetryStock(pantry.id),
+      getDonationBasedStock(pantry.id),
+    ]).then(([telRes, donRes]) => {
+      const tel = telRes.status === "fulfilled" ? telRes.value : null;
+      const don = donRes.status === "fulfilled" ? donRes.value : null;
+      if (tel) setLiveStock(tel);
+      else if (don) setLiveStock(don);
     });
   }, [pantry.id]);
   const stock = liveStock ?? pantry.stock ?? null;
@@ -510,6 +518,10 @@ export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry }) => {
       throw new Error(text || `Failed (${res.status})`);
     }
     loadDonations();
+    // Refresh stock badge to reflect the new donation
+    getDonationBasedStock(pantry.id).then((s) => {
+      if (s) setLiveStock(s);
+    });
   };
 
   const handleWishlistSubmit = async (item: string) => {
@@ -529,7 +541,7 @@ export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry }) => {
   }, [pantry.id]);
 
   const handleMessageSubmit = async (content: string) => {
-    await postMessage(pantry.id, content);
+    await postMessage(pantry.id, content, "Community member");
     const items = await fetchMessages(pantry.id);
     setMessages(items);
   };
