@@ -325,7 +325,7 @@ const WishlistModal = ({ onClose, onSubmit }: WishlistModalProps) => {
     }
   };
 
-  return (
+  return createPortal(
     <div className="wishlist-modal-overlay" onClick={handleOverlayClick}>
       <div className="wishlist-modal" role="dialog" aria-modal="true">
         <button type="button" className="wishlist-modal-close" onClick={onClose} aria-label="Close">×</button>
