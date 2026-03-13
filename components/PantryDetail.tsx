@@ -206,6 +206,10 @@ const DonorNoteModal = ({ onClose, onSubmit }: DonorNoteModalProps) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
   const toggleCategory = (cat: string) => {
     setCategories((prev) => {
       const next = new Set(prev);
@@ -230,7 +234,7 @@ const DonorNoteModal = ({ onClose, onSubmit }: DonorNoteModalProps) => {
   };
 
   return createPortal(
-    <div className="donor-note-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="donor-note-modal-overlay" onClick={handleOverlayClick}>
       <div className="donor-note-modal" role="dialog" aria-modal="true">
         <button type="button" className="donor-note-modal-close" onClick={onClose} aria-label="Close">×</button>
         <h3>Report a donation</h3>
@@ -301,6 +305,10 @@ const WishlistModal = ({ onClose, onSubmit }: WishlistModalProps) => {
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
+  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -318,7 +326,7 @@ const WishlistModal = ({ onClose, onSubmit }: WishlistModalProps) => {
   };
 
   return (
-    <div className="wishlist-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="wishlist-modal-overlay" onClick={handleOverlayClick}>
       <div className="wishlist-modal" role="dialog" aria-modal="true">
         <button type="button" className="wishlist-modal-close" onClick={onClose} aria-label="Close">×</button>
         <h3>Add item to wishlist</h3>
@@ -363,6 +371,10 @@ const MessageModal = ({ onClose, onSubmit }: MessageModalProps) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -380,7 +392,7 @@ const MessageModal = ({ onClose, onSubmit }: MessageModalProps) => {
   };
 
   return createPortal(
-    <div className="wishlist-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="wishlist-modal-overlay" onClick={handleOverlayClick}>
       <div className="wishlist-modal" role="dialog" aria-modal="true">
         <button type="button" className="wishlist-modal-close" onClick={onClose} aria-label="Close">×</button>
         <h3>Leave a message</h3>
