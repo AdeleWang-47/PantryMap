@@ -199,7 +199,7 @@ interface DonorNoteModalProps {
   onSubmit: (size: string, categories: string[], note: string) => Promise<void>;
 }
 
-const DonorNoteModal: React.FC<DonorNoteModalProps> = ({ onClose, onSubmit }) => {
+const DonorNoteModal = ({ onClose, onSubmit }: DonorNoteModalProps) => {
   const [size, setSize] = useState("");
   const [categories, setCategories] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
@@ -293,7 +293,7 @@ interface WishlistModalProps {
   onSubmit: (item: string) => Promise<void>;
 }
 
-const WishlistModal: React.FC<WishlistModalProps> = ({ onClose, onSubmit }) => {
+const WishlistModal = ({ onClose, onSubmit }: WishlistModalProps) => {
   const [item, setItem] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -358,7 +358,7 @@ interface MessageModalProps {
   onSubmit: (content: string) => Promise<void>;
 }
 
-const MessageModal: React.FC<MessageModalProps> = ({ onClose, onSubmit }) => {
+const MessageModal = ({ onClose, onSubmit }: MessageModalProps) => {
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
