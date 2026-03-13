@@ -1,10 +1,6 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* ─── Tailwind theme tokens ──────────────────────────────────── */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,19 +8,1432 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── Design tokens (mirrors legacy styles.css :root) ─────────── */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+
+  --bg: #f5f5f5;
+  --panel: #ffffff;
+  --text: #2c3e50;
+  --muted: #6b7280;
+  --accent: #52b788;
+  --primary: #2d6a4f;
+  --danger: #ef4444;
+  --warn: #f59e0b;
+  --border: #e5e7eb;
+  --shadow: rgba(0, 0, 0, 0.1);
+  --app-bg: #f1f5f9;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
 }
 
+/* ─── Leaflet ─────────────────────────────────────────────────── */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  /* Prevent browser scroll/swipe from intercepting map drag on touch devices */
+  touch-action: none;
+  pointer-events: auto;
+}
+
+/* ─── Map legend (injected by MapView) ───────────────────────── */
+.map-legend {
+  background: rgba(255, 255, 255, 0.94);
+  outline: 1pt solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text);
+  min-width: 170px;
+}
+.map-legend-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.map-legend-item:last-child {
+  margin-bottom: 0;
+}
+.map-legend-pin {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* Leaflet marker wrapper — transparent background so SVG pin shows cleanly */
+.pantry-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* ─── Pantry List ─────────────────────────────────────────────── */
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.list-item {
+  width: 100%;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  outline: none;
+}
+
+.list-item:focus {
+  box-shadow: none;
+  outline: 1pt solid rgba(82, 183, 136, 0.8);
+}
+
+.list-item:hover {
+  border-color: var(--accent);
+}
+
+.list-card {
+  display: grid;
+  grid-template-columns: 64px 1fr 16px;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.thumb img {
+  width: 60px;
+  height: 60px;
+  border-radius: 10px;
+  object-fit: cover;
+  display: block;
+}
+
+.list-main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.list-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.list-title {
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.list-distance {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.list-address {
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.stock.low   { color: var(--danger); }
+.stock.medium { color: var(--warn); }
+.stock.high  { color: var(--accent); }
+.stock.unknown { color: var(--muted); }
+
+.dot     { color: var(--muted); }
+.restock { color: var(--muted); }
+
+.chevron {
+  color: var(--accent);
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.list-item:hover .chevron {
+  transform: translateX(2px);
+}
+
+/* ─── Detail Hero ─────────────────────────────────────────────── */
+.detail-hero {
+  background: var(--panel);
+  border-radius: 16px;
+  overflow: hidden;
+  outline: 1pt solid rgba(148, 163, 184, 0.35);
+  margin-bottom: 24px;
+  border: none;
+}
+
+.detail-hero-cover {
+  position: relative;
+}
+
+.detail-hero-cover img.detail-hero-img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  display: block;
+}
+
+.detail-hero-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  outline: 1pt solid rgba(148, 163, 184, 0.35);
+}
+
+.detail-hero-body {
+  padding: 20px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.detail-subline {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ─── Detail Sections (shared wrapper) ───────────────────────── */
+.detail-section {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.detail-section h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.stock-section {
+  display: block;
+}
+
+.stock-card {
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 20px;
+  border: none;
+  outline: 1pt solid rgba(148, 163, 184, 0.35);
+}
+
+.stock-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.stock-card-head-text {
+  min-width: 0;
+}
+
+.stock-card-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.stock-card-desc {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+/* ── Info button + tooltip ───────────────────────── */
+.stock-info-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.stock-info-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 2px solid rgba(44, 62, 80, 0.55);
+  background: transparent;
+  color: rgba(44, 62, 80, 0.8);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.stock-info-btn:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.stock-info-img {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 6px;
+  max-width: min(67.5vw, 315px);
+  width: auto;
+  height: auto;
+  max-height: 52.5vh;
+  object-fit: contain;
+  z-index: 1000;
+  pointer-events: none;
+  border-radius: 8px;
+}
+
+.stock-info-wrap:hover .stock-info-img {
+  display: block;
+}
+
+/* extend hover zone so image stays visible when moving mouse onto it */
+.stock-info-wrap:hover::after {
+  content: '';
+  position: absolute;
+  left: -60px;
+  right: -60px;
+  top: 0;
+  bottom: -320px;
+  z-index: 999;
+}
+
+/* ── Gauge ───────────────────────────────────────── */
+.detail-gauge {
+  position: relative;
+  width: 180px;
+  max-width: 100%;
+  margin: 4px auto 0;
+}
+
+.detail-gauge-svg {
+  width: 100%;
+  height: auto;
+}
+
+.detail-gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding-bottom: 6px;
+}
+
+.detail-gauge-status {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.detail-gauge-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── Meta lines ──────────────────────────────────── */
+.stock-meta {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.stock-meta-line {
+  margin: 0;
+}
+
+/* ─── Donor Notes ─────────────────────────────────────────────── */
+.donor-notes-section {
+  background: rgba(82, 183, 136, 0.08);
+  border: 1px solid rgba(82, 183, 136, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.donor-notes-section h2 {
+  margin: 0;
+}
+
+.donor-notes-cta {
+  width: 100%;
+  border: none;
+  border-radius: 16px;
+  padding: 13px 18px;
+  background: rgba(82, 183, 136, 0.18);
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.donor-notes-cta:hover {
+  background: rgba(82, 183, 136, 0.28);
+}
+
+.donor-notes-cta:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.donor-notes-latest {
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.donor-note-empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+.donor-note-card {
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--panel);
+  outline: 1pt solid rgba(148, 163, 184, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.donor-note-media {
+  line-height: 0;
+}
+
+.donor-note-media img {
+  width: 140px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.donor-note-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.donor-note-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.donor-note-chip {
+  display: inline-block;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(82, 183, 136, 0.14);
+  color: var(--text);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.donor-note-time {
+  font-size: 12px;
+  color: var(--muted);
+  display: block;
+}
+
+.donor-notes-toggle {
+  margin-top: 4px;
+}
+
+/* ─── Shared Detail Card (Wishlist wrapper) ───────────────────── */
+.detail-card-section {
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 20px;
+  border: none;
+  outline: 1pt solid rgba(148, 163, 184, 0.35);
+}
+
+.detail-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.detail-card-head h2 {
+  margin: 0;
+}
+
+.section-heading-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wishlist-add {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(82, 183, 136, 0.18);
+  color: var(--primary);
+  font-size: 22px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: 1pt solid rgba(148, 163, 184, 0.45);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wishlist-add:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wishlist-grid {
+  width: 100%;
+  min-height: 60px;
+}
+
+/* ─── Wishlist bubble / circle-pack visualization ─────────────── */
+.wishlist-bubble-pack {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.wishlist-bubble-pack-inner {
+  position: relative;
+  transform-origin: top left;
+}
+
+.wishlist-bubble {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--primary);
+  background: rgba(82, 183, 136, 0.18);
+  border: 2px solid rgba(82, 183, 136, 0.35);
+  box-shadow: 0 2px 8px rgba(82, 183, 136, 0.15);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  word-break: break-word;
+  line-height: 1.15;
+  overflow: hidden;
+}
+
+.wishlist-bubble:hover {
+  transform: scale(1.06);
+  box-shadow: 0 4px 16px rgba(82, 183, 136, 0.3);
+  background: rgba(82, 183, 136, 0.28);
+}
+
+.wishlist-empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 6px 0;
+}
+
+.wishlist-item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color 0.2s ease;
+}
+
+.wishlist-item-card:hover {
+  border-color: var(--accent);
+}
+
+.wishlist-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.wishlist-item-name {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.wishlist-item-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ─── Messages ────────────────────────────────────────────────── */
+.message-section {
+  gap: 16px;
+}
+
+.message-cta {
+  width: 100%;
+  border: none;
+  border-radius: 16px;
+  padding: 13px 18px;
+  background: rgba(82, 183, 136, 0.18);
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.message-cta:hover {
+  background: rgba(82, 183, 136, 0.28);
+}
+
+.message-cta:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.message-card {
+  display: flex;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--panel);
+  outline: 1pt solid rgba(148, 163, 184, 0.35);
+}
+
+.message-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(82, 183, 136, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary);
+  overflow: hidden;
+}
+
+.message-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.message-body h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.message-body p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.message-body time {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.message-empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 6px 0;
+}
+
+.message-toggle {
+  margin-top: 4px;
+}
+
+/* ─── Shared section link / toggle ───────────────────────────── */
+.section-link {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+}
+
+.section-link:hover {
+  text-decoration: underline;
+}
+
+/* ─── Inline form inputs (donor notes / messages / wishlist) ─── */
+.detail-form-input,
+.detail-form-textarea,
+.detail-form-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text);
+  background: #f7f9fb;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.detail-form-textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.detail-form-input:focus,
+.detail-form-textarea:focus,
+.detail-form-select:focus {
+  outline: none;
+  border-color: rgba(82, 183, 136, 0.6);
+  box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.15);
+}
+
+.detail-form-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.detail-form-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* ─── Map page layout ──────────────────────────────────────────── */
+.map-page-layout {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;   /* mobile: map on top, drawer on bottom */
+  /* overflow:clip clips visually without creating a scroll container,
+     so child overflow-y:auto elements can still scroll */
+  overflow: clip;
+}
+@media (min-width: 768px) {
+  .map-page-layout {
+    flex-direction: row;    /* desktop: sidebar left, map right */
+  }
+}
+
+/* ── Left sidebar (desktop / tablet) ── */
+.map-sidebar {
+  display: none;              /* hidden on mobile */
+  /* flex column: header row on top, scrollable content below */
+  flex-direction: column;
+  width: 300px;               /* tablet default */
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  z-index: 10;
+  flex-shrink: 0;
+  transition: width 240ms ease;
+  /* No overflow:hidden here — it blocks child scroll containers in Safari/WebKit */
+}
+@media (min-width: 768px) {
+  .map-sidebar { display: flex; }
+}
+@media (min-width: 1024px) {
+  .map-sidebar { width: 360px; }
+}
+
+.map-sidebar-collapsed {
+  width: 52px !important;
+}
+
+/* Header row that holds the toggle button */
+.map-sidebar-header {
+  flex-shrink: 0;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Toggle / back button */
+.map-sidebar-toggle {
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--primary);
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  outline: 1pt solid rgba(148, 163, 184, 0.45);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.map-sidebar-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+/* Scrollable content — fills remaining sidebar height */
+.map-sidebar-content {
+  flex: 1 1 0;          /* "1 1 0" forces flex to compute the height, not content */
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 12px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Map section ── */
+.map-section {
+  flex: 1;
+  position: relative;
+  min-height: 0;   /* required in column-flex so map doesn't overflow */
+  min-width: 0;
+}
+
+.map-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* ── Mobile / tablet bottom drawer ── */
+.map-mobile-drawer {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  padding: 0;
+  font-size: 12px;
+  color: var(--muted);
+  /* overflow:clip clips visually without blocking child scroll containers */
+  overflow: clip;
+  /* drawer gets 48% of the layout height */
+  flex: 0 0 48%;
+}
+@media (min-width: 768px) {
+  .map-mobile-drawer { display: none; }
+}
+/* landscape / very short screens: smaller drawer */
+@media (max-height: 560px) {
+  .map-mobile-drawer { flex: 0 0 40%; }
+}
+
+/* ── List view scroll area */
+.map-drawer-list-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 10px 10px;
+}
+
+/* ── Detail view wrapper (fills full drawer height) */
+.map-drawer-detail-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header row with back button */
+.map-drawer-detail-header {
+  flex-shrink: 0;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Scrollable detail content */
+.map-drawer-detail-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 10px 16px;
+}
+
+/* Mobile drawer: hide "Pantries in view" heading */
+.map-drawer-list-wrap .list-heading {
+  display: none;
+}
+
+/* Mobile drawer: larger touch targets */
+.map-drawer-list-wrap .list-filter-label {
+  width: 44px;
+  font-size: 13px;
+}
+.map-drawer-list-wrap .list-chip {
+  font-size: 13px;
+  padding: 6px 14px;
+  min-height: 34px;
+}
+/* Bigger cards in the drawer */
+.map-drawer-list-wrap .list-item {
+  padding: 12px 14px;
+}
+.map-drawer-list-wrap .list-card {
+  grid-template-columns: 72px 1fr 20px;
+  gap: 12px;
+}
+.map-drawer-list-wrap .thumb img {
+  width: 68px;
+  height: 68px;
+}
+.map-drawer-list-wrap .list-title {
+  font-size: 16px;
+}
+.map-drawer-list-wrap .list-address,
+.map-drawer-list-wrap .list-meta {
+  font-size: 13px;
+}
+
+/* ─── Mobile drawer back button */
+.sidebar-back-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--primary);
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  outline: 1pt solid rgba(148, 163, 184, 0.45);
+  z-index: 10;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+.sidebar-back-btn:hover {
+  transform: translateX(-2px);
+}
+
+/* ─── List controls (filter/sort row above pantry list) ───────── */
+/* ─── Filter chip bar (replaces select dropdowns) ────────────── */
+.list-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  padding: 8px 0 10px;
+  z-index: 5;
+  border-bottom: 1px solid var(--border);
+}
+
+.list-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.list-filter-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  width: 46px;
+  flex-shrink: 0;
+}
+
+.list-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.list-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  touch-action: manipulation;
+}
+
+.list-chip:hover {
+  background: rgba(82, 183, 136, 0.08);
+  border-color: var(--accent);
+  color: var(--primary);
+}
+
+.list-chip-active {
+  background: rgba(82, 183, 136, 0.18);
+  border-color: var(--accent);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+/* ─── Donor Note Modal ────────────────────────────────────────── */
+.donor-note-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4000;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.donor-note-modal {
+  position: relative;
+  background: var(--panel);
+  border-radius: 20px;
+  padding: 28px;
+  width: min(480px, 90vw);
+  outline: 1pt solid rgba(148, 163, 184, 0.45);
+  display: grid;
+  gap: 16px;
+}
+
+.donor-note-modal h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.donor-note-modal-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.donor-note-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.donor-note-modal-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.donor-note-form {
+  display: grid;
+  gap: 14px;
+}
+
+.donor-note-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.donor-note-form label span {
+  display: block;
+}
+
+.donor-note-form input[type="text"],
+.donor-note-form input[type="file"],
+.donor-note-form textarea,
+.donor-note-form select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text);
+  background: #f7f9fb;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.donor-note-form textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.donor-note-form input:focus,
+.donor-note-form textarea:focus,
+.donor-note-form select:focus {
+  outline: none;
+  border-color: rgba(82, 183, 136, 0.6);
+  box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.15);
+}
+
+.donor-note-categories-title {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.donor-note-categories-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f7f9fb;
+  display: grid;
+  gap: 8px;
+}
+
+.donor-note-category-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 400;
+}
+
+.donor-note-category-item input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+}
+
+.donor-note-modal-error {
+  color: var(--danger);
+  font-size: 13px;
+  min-height: 1.2em;
+}
+
+.donor-note-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.donor-note-modal-cancel {
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.donor-note-modal-submit {
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.donor-note-modal-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ─── Wishlist + Message Modal (shared overlay/card) ─────────── */
+.wishlist-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4000;
+  padding: 20px;
+}
+
+.wishlist-modal {
+  background: var(--panel);
+  border-radius: 24px;
+  width: min(440px, 90vw);
+  outline: 1pt solid rgba(148, 163, 184, 0.45);
+  padding: 32px;
+  position: relative;
+  display: grid;
+  gap: 18px;
+}
+
+.wishlist-modal h3 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.wishlist-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(82, 183, 136, 0.18);
+  color: var(--primary);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wishlist-modal-close:hover {
+  background: rgba(82, 183, 136, 0.3);
+}
+
+.wishlist-form,
+.message-form {
+  display: grid;
+  gap: 16px;
+}
+
+.wishlist-form label,
+.message-form label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.wishlist-form input,
+.message-form input {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--text);
+  background: #f7f9fb;
+  font-family: inherit;
+}
+
+.wishlist-form input:focus,
+.message-form input:focus {
+  outline: none;
+  border-color: rgba(82, 183, 136, 0.6);
+  box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.15);
+}
+
+.wishlist-form textarea,
+.message-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--text);
+  background: #f7f9fb;
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+
+.wishlist-form textarea:focus,
+.message-form textarea:focus {
+  outline: none;
+  border-color: rgba(82, 183, 136, 0.6);
+  box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.15);
+}
+
+.wishlist-modal-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.wishlist-modal-error {
+  font-size: 13px;
+  color: var(--danger);
+  min-height: 18px;
+}
+
+.wishlist-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.wishlist-modal-cancel {
+  min-width: 100px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 11px 18px;
+  cursor: pointer;
+  background: #e2e8f0;
+  color: var(--text);
+}
+
+.wishlist-modal-cancel:hover {
+  background: #d1d9e5;
+}
+
+.wishlist-modal-submit {
+  min-width: 100px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 11px 18px;
+  cursor: pointer;
+  background: var(--primary);
+  color: #ffffff;
+  outline: 1pt solid rgba(148, 163, 184, 0.45);
+}
+
+.wishlist-modal-submit:hover {
+  background: #1f5c3d;
+}
+
+.wishlist-modal-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ─── Ordered list fix ────────────────────────────────────────── */
 ol.list-decimal {
   list-style-type: decimal !important;
   list-style-position: outside;
@@ -38,4 +1447,83 @@ ol.list-decimal > li {
 
 ol.list-decimal > li::marker {
   color: #000;
+}
+
+/* ─── Responsive: modals as bottom-sheet on mobile ─────────────── */
+@media (max-width: 639px) {
+  /* Overlay: align content to bottom */
+  .donor-note-modal-overlay,
+  .wishlist-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  /* Modal card: full width, rounded top corners, slide-up feel */
+  .donor-note-modal,
+  .wishlist-modal {
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 88vh;
+    max-height: 88dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px 20px 32px;
+  }
+}
+
+/* ─── Responsive: list controls stack on small screens ─────────── */
+@media (max-width: 479px) {
+  .list-controls {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+}
+
+/* ─── Responsive: pantry detail hero on mobile ─────────────────── */
+@media (max-width: 639px) {
+  .detail-hero-cover {
+    height: 160px;
+  }
+  .detail-hero-img {
+    height: 160px;
+  }
+  /* donor-notes, wishlist, message cards: reduce padding on mobile */
+  .donor-notes-section,
+  .message-section,
+  .detail-card-section {
+    padding: 16px;
+  }
+  /* stock section outer wrapper must stay padding:0 so .stock-card stays full-width */
+  .stock-section {
+    padding: 0 !important;
+  }
+  /* reduce stock card's own padding to match others */
+  .stock-card {
+    padding: 16px;
+  }
+}
+
+/* ─── Responsive: wishlist bubble pack on small screens ────────── */
+@media (max-width: 639px) {
+  .wishlist-bubble-pack {
+    height: 220px;
+  }
+}
+
+/* ─── Tap highlight & touch sizing for interactive elements ─────── */
+@media (pointer: coarse) {
+  .list-card,
+  .map-sidebar-toggle,
+  .sidebar-back-btn,
+  .donor-notes-cta,
+  .message-cta,
+  .wishlist-add {
+    /* Ensure minimum 44×44 touch target */
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+  /* Remove tap highlight flash on iOS */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
 }

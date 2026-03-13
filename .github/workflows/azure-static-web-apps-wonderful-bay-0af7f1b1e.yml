@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     env:
-      NEXT_PUBLIC_PANTRY_MAP_URL: ${{ vars.NEXT_PUBLIC_PANTRY_MAP_URL }}
+      NEXT_PUBLIC_PANTRY_API_BASE_URL: ${{ vars.NEXT_PUBLIC_PANTRY_API_BASE_URL }}
     steps:
       - uses: actions/checkout@v3
         with:

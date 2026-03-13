@@ -6,7 +6,7 @@
     "dev": "next dev --webpack",
     "dev:local": "next dev --webpack -H 127.0.0.1 -p 3000",
     "dev:turbopack": "next dev",
-    "dev:map": "python3 -m http.server 8080 --directory PantryMap/frontend",
+    "dev:map": "python3 -m http.server 8080 --directory PantryMap/legacy/frontend",
     "dev:backend": "cd PantryMap/functions-backend && npm run build && npm start",
     "docs:manual": "node scripts/generate-user-manual-pdf.mjs",
     "build": "next build",
@@ -14,6 +14,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.562.0",
     "next": "16.1.4",
     "react": "19.2.3",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

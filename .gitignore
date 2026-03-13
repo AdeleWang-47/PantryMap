@@ -1,23 +1,34 @@
-<<<<<<< HEAD
 # macOS
 .DS_Store
 __MACOSX/
 
-# Unnecessary / merge artifacts
-guide-map-merge/
-
 # Node / JavaScript
 node_modules/
-npm-debug.log
-yarn-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Python
 __pycache__/
 *.py[cod]
 
-# Environment & local config
+# Next.js build output
+.next/
+out/
+dist/
+build/
+
+# Environment & secrets — NEVER commit these
 .env
 .env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# Azure Functions local settings (contains real API keys/connection strings)
+local.settings.json
 
 # SQLite databases
 backend/database/*.db
@@ -26,23 +37,5 @@ backend/database/*.db
 *.log
 backend/.server*.log
 
-
-
-=======
-node_modules/
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.production
-.next/
-out/
-dist/
-build/
-.DS_Store
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-local.settings.json
->>>>>>> 731ef9a6a9b5e558b5278083ac2283ad0bc50a41
+# Merge artifacts
+guide-map-merge/

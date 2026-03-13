@@ -1,40 +1,39 @@
-# Connected Micro Pantry (CMP) — Donation Guide + Pantry Map
+# PantryLink — Community Pantry Map
 
-This repo contains:
-
-- A **Next.js website** (Donation Guide + About Us + Update flow)
-- A **PantryMap** web map (Leaflet-based map dashboard + optional backends)
-- Supporting docs and a user manual PDF
-
-## User manual (PDF)
-
-- `docs/UserManual.pdf` (generated from `docs/UserManual.md`)
-- To regenerate locally: `npm run docs:manual`
+A modern Next.js web app for locating community fridges and micro-pantries, reporting donations, and viewing real-time stock levels.
 
 ## Project structure
 
-High-level layout:
-
 ```text
 app/                         Next.js App Router pages
-components/                  Next.js UI components
-public/                      Static assets for the Next.js site
+  map/                         Interactive pantry map (/map)
+  food-donation-guide/         Donation guide
+  about-us/                    About page
+  update/                      Pantry update flow
+components/                  React/TypeScript UI components
+  Header.tsx                   Site header with responsive nav
+  MapView.tsx                  Leaflet map (integrated into Next.js)
+  PantryList.tsx               Pantry list with filter chips
+  PantryDetail.tsx             Pantry detail panel
+  StockGauge.tsx               Semi-circle stock level gauge
+lib/
+  pantry-api.ts                API client for Azure Functions backend
+  pantry-types.ts              Shared TypeScript types
+public/                      Static assets (logos, icons, placeholders)
 PantryMap/
-  frontend/                  Leaflet map dashboard (static web app)
-  functions-backend/         Azure Functions backend (recommended local API)
-  backend/                   Express backend (legacy; optional)
-  legacy/                    Older scripts/data kept for reference
-docs/                        Documentation, including the User Manual PDF
+  functions-backend/           Azure Functions backend (APIs: pantries, donations, messages, telemetry, wishlist)
+  legacy/                      Archived legacy code (old static frontend + Express backend)
+docs/                        Documentation
 ```
 
 ## Prerequisites
 
-- **Node.js**: v18+ recommended
-- **npm**: comes with Node.js
-- **Python 3** (optional): used for the static server for `PantryMap/frontend`
-- **Azure Functions Core Tools v4** (optional): only if running `PantryMap/functions-backend` locally
+- **Node.js** v18+
+- **Azure Functions Core Tools v4** (optional — only needed to run the backend API locally)
 
-## Run the Next.js site (Donation Guide / About Us)
+## Run locally
+
+### 1. Start the Next.js app
 
 From the repo root:
 
@@ -43,49 +42,46 @@ npm install
 npm run dev:local
 ```
 
-What to expect:
+The dev server starts at **`http://localhost:3000`**.
 
-- The dev server starts at **`http://127.0.0.1:3000`**
-- Pages you can open:
-  - `/` (home)
-  - `/about-us`
-  - `/food-donation-guide`
-  - `/food-donation-guide/search`
+Pages:
+- `/map` — Interactive pantry map
+- `/food-donation-guide` — Donation guide
+- `/about-us` — About page
 
-Notes:
-
-- If you see “another instance of next dev running” or port conflicts, stop the other dev server and retry. See `LOCAL_DEV.md`.
-
-## Run the PantryMap (Leaflet map dashboard)
-
-The map dashboard is a separate static frontend under `PantryMap/frontend/`.
-
-```bash
-npm run dev:map
-```
-
-What to expect:
-
-- A static server starts at **`http://localhost:8080`**
-- You should see a map with markers and a side panel when clicking markers
-
-## Run the PantryMap Azure Functions backend (optional, recommended)
-
-This provides APIs such as `/api/health` for local integration.
+### 2. Start the Azure Functions backend (optional, recommended)
 
 ```bash
 npm run dev:backend
 ```
 
-What to expect:
+API root: **`http://localhost:7071/api`**
 
-- API root at **`http://localhost:7071/api`**
-- Health check at **`http://localhost:7071/api/health`**
+Set the environment variable so the frontend points to it:
 
-More details: `LOCAL_DEV.md` and `PantryMap/run_local.md`.
+```bash
+NEXT_PUBLIC_PANTRY_API_BASE_URL=http://localhost:7071/api
+```
 
-## Environment variables (Next.js → PantryMap iframe)
+See `NEXTJS_ENVIRONMENT_SETUP.md` and `LOCAL_DEV.md` for full setup details.
 
-Some pages embed the PantryMap via `NEXT_PUBLIC_PANTRY_MAP_URL`.
+## Backend APIs
 
-- Setup guide: `NEXTJS_ENVIRONMENT_SETUP.md`
+The Azure Functions backend (`PantryMap/functions-backend/`) provides:
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/pantries` | List all pantries |
+| `GET /api/pantries/{id}` | Single pantry by ID |
+| `GET /api/donations` | Recent donations |
+| `POST /api/donations` | Report a donation |
+| `GET /api/telemetry/latest` | Latest sensor reading (e.g. pantry 4015) |
+| `GET /api/wishlist` | Pantry wishlist items |
+| `GET /api/messages` | Community messages |
+| `POST /api/messages` | Post a message |
+
+## Notes
+
+- The map is fully integrated into Next.js — no separate static server needed.
+- Sensor-connected pantries (e.g. pantry 4015) receive live stock updates via `/api/telemetry/latest` when the detail panel is opened.
+- User manual PDF: `docs/UserManual.pdf`
