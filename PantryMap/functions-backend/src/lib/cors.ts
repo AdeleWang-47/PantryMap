@@ -1,6 +1,7 @@
 import { HttpRequest, HttpResponseInit } from "@azure/functions";
 
 const ALLOWED_ORIGINS = new Set([
+  // Local development
   "http://127.0.0.1:5500",
   "http://localhost:5500",
   "http://127.0.0.1:5173",
@@ -9,6 +10,10 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:3000",
   "http://127.0.0.1:8080",
   "http://localhost:8080",
+  // Production
+  "https://pantry-link.com",
+  "https://www.pantry-link.com",
+  "https://wonderful-bay-0af7f1b1e.2.azurestaticapps.net",
 ]);
 
 function resolveAllowedOrigin(origin?: string | null): string {

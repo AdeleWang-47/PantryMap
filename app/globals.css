@@ -1218,7 +1218,8 @@ body {
 
 .donor-note-category-item {
   display: flex;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: center;
   gap: 8px;
   font-size: 13px;
   color: var(--text);
@@ -1227,9 +1228,12 @@ body {
 }
 
 .donor-note-category-item input[type="checkbox"] {
-  margin-top: 2px;
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
   accent-color: var(--primary);
+  cursor: pointer;
 }
 
 .donor-note-modal-error {

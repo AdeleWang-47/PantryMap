@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Pantry } from "@/lib/pantry-types";
 import { StockGauge } from "@/components/StockGauge";
 import type { StockInfo } from "@/lib/pantry-types";
@@ -228,7 +229,7 @@ const DonorNoteModal: React.FC<DonorNoteModalProps> = ({ onClose, onSubmit }) =>
     }
   };
 
-  return (
+  return createPortal(
     <div className="donor-note-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="donor-note-modal" role="dialog" aria-modal="true">
         <button type="button" className="donor-note-modal-close" onClick={onClose} aria-label="Close">×</button>
@@ -248,14 +249,15 @@ const DonorNoteModal: React.FC<DonorNoteModalProps> = ({ onClose, onSubmit }) =>
             <span className="donor-note-categories-title">What are you donating? Select all that apply</span>
             <div className="donor-note-categories-list">
               {DONATION_CATEGORIES.map((cat) => (
-                <label key={cat} className="donor-note-category-item">
+                <label key={cat} className="donor-note-category-item" style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "8px" }}>
                   <input
                     type="checkbox"
                     checked={categories.has(cat)}
                     onChange={() => toggleCategory(cat)}
                     disabled={submitting}
+                    style={{ flexShrink: 0, width: "16px", height: "16px", margin: 0, cursor: "pointer" }}
                   />
-                  {cat}
+                  <span>{cat}</span>
                 </label>
               ))}
             </div>
@@ -280,7 +282,8 @@ const DonorNoteModal: React.FC<DonorNoteModalProps> = ({ onClose, onSubmit }) =>
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -344,7 +347,8 @@ const WishlistModal: React.FC<WishlistModalProps> = ({ onClose, onSubmit }) => {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -375,7 +379,7 @@ const MessageModal: React.FC<MessageModalProps> = ({ onClose, onSubmit }) => {
     }
   };
 
-  return (
+  return createPortal(
     <div className="wishlist-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="wishlist-modal" role="dialog" aria-modal="true">
         <button type="button" className="wishlist-modal-close" onClick={onClose} aria-label="Close">×</button>
@@ -403,7 +407,8 @@ const MessageModal: React.FC<MessageModalProps> = ({ onClose, onSubmit }) => {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
