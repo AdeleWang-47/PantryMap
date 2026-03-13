@@ -8,6 +8,7 @@
     "dev:turbopack": "next dev",
     "dev:map": "python3 -m http.server 8080 --directory PantryMap/frontend",
     "dev:backend": "cd PantryMap/functions-backend && npm run build && npm start",
+    "docs:manual": "node scripts/generate-user-manual-pdf.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

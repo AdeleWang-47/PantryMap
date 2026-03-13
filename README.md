@@ -1,258 +1,91 @@
-<<<<<<< HEAD
-Connected Micro Pantry Platform — Map Dashboard Prototype
+# Connected Micro Pantry (CMP) — Donation Guide + Pantry Map
 
-Overview
-- Web-based map showing pantry locations (fake data for now)
-- Click markers to open a detail side panel
-- Built with Leaflet; ready to swap in real APIs and sensor data later
+This repo contains:
 
-Quick Start
-1. Enter the frontend bundle: `cd frontend`
-2. Use a simple static server (needed due to Leaflet asset loading and fetch):
-   - Python 3: `python3 -m http.server 3000`
-   - Node: `npx serve -l 3000 .`
-3. Open `http://localhost:3000` in your browser.
-4. Click on any green marker to view pantry details with photos and information.
+- A **Next.js website** (Donation Guide + About Us + Update flow)
+- A **PantryMap** web map (Leaflet-based map dashboard + optional backends)
+- Supporting docs and a user manual PDF
 
-Backend (two options)
-- `functions-backend/` (Azure Functions, **default for local dev**): the frontend is configured to call `http://localhost:7071/api` (see `frontend/api.js`). For end-to-end local instructions, see `run_local.md`.
-- `backend/` (Express, legacy): still used by some container/CI deployment scripts and runs on port `5000`, but it is not the default local dev path.
+## User manual (PDF)
 
-Files
-- **前端入口**：`frontend/index.html`（单一页面端入口；访问根路径 `/` 时由静态服务返回该页）
-- `frontend/index.html`: Root HTML with map container and side panel
-- `frontend/styles.css`: Basic layout and responsive styles
-- `frontend/app.js`: App bootstrap, map init, marker handling, panel updates
-- `frontend/api.js`: Simple API layer with `getPantries()` (reads `frontend/pantries.json`)
-- `frontend/pantries.json`: Real pantry data converted from `legacy/frontend-data/micropantries_all.csv`
-- `legacy/frontend-data/micropantries_all.csv`: Source CSV with 335+ pantry locations (kept for reference)
+- `docs/UserManual.pdf` (generated from `docs/UserManual.md`)
+- To regenerate locally: `npm run docs:manual`
 
-Legacy
-- `legacy/app.js`, `legacy/api.js`: Deprecated copies that used to live in the repo root. Use the `frontend/` versions instead.
-- `legacy/frontend-data/mockData.json`: Deprecated demo dataset (not used by the app).
-- `legacy/fetch_data.py`: Optional Python script to pull telemetry from Azure SQL and write `pantry_data.json`; run from project root as `python legacy/fetch_data.py`. The app prefers the Azure Functions API and uses `frontend/pantry_data.json` as fallback.
-- `legacy/served_page_3000.html`: Snapshot of sensor history page (dev/test, not used by the app).
-- `legacy/pantry_data.json`: Backup copy of telemetry data; the live copy used by the frontend is `frontend/pantry_data.json`.
+## Project structure
 
-Data Contract (initial)
-- Pantry object (example):
-  - `id`: string
-  - `name`: string
-  - `status`: "open" | "closed" | "low-inventory"
-  - `address`: string
-  - `location`: { `lat`: number, `lng`: number }
-  - `inventory`: { `categories`: Array<{ name: string, quantity: number }> }
-  - `sensors`: { `weightKg`: number, `lastDoorEvent`: string, `updatedAt`: string }
-  - `contact`: { `owner`: string, `phone`: string }
+High-level layout:
 
-Swapping to Real Data
-- Update `frontend/api.js` to call your backend (REST/GraphQL):
-  - Keep the same return shape for drop-in compatibility
-  - Or adapt in `normalizePantry(p)` inside `frontend/api.js`
-- For real-time sensors, consider:
-  - Server-Sent Events or WebSocket stream → call `window.PantryMap.updatePantryMarker(pantry)` (and optionally refresh the open panel via `window.PantryMap.showPantryDetails(pantry)`) when updates arrive
-  - Polling fallback (e.g., every 30–60s) if realtime isn’t ready
-
-Marker Logic
-- Marker color indicates pantry `status`
-- Click opens detail panel with inventory and latest sensor readings
-- Mobile: panel overlays map; Desktop: panel docks on the right
-
-Development Notes
-- Keep IDs stable across updates to preserve marker references
-- If you add clustering or heatmap, do so in `frontend/app.js` behind a toggle
-- All styles are minimal; feel free to enhance the UI kit later
-
-
-
-
-=======
-# CMP Donation Guide + About Us pages
-
-This repository contains the **Food Donation Guide** and **About Us** pages for the CMP (Community Micro-Pantry) project.
-It is built with **Next.js (App Router)** and is intended to run as a standalone frontend module.
-
----
-
-## Tech Stack
-
-* **Next.js 16 (App Router)**
-* **React**
-* **TypeScript**
-* **Tailwind CSS**
-* **Node.js / npm**
-
----
+```text
+app/                         Next.js App Router pages
+components/                  Next.js UI components
+public/                      Static assets for the Next.js site
+PantryMap/
+  frontend/                  Leaflet map dashboard (static web app)
+  functions-backend/         Azure Functions backend (recommended local API)
+  backend/                   Express backend (legacy; optional)
+  legacy/                    Older scripts/data kept for reference
+docs/                        Documentation, including the User Manual PDF
+```
 
 ## Prerequisites
 
-Before you begin, make sure you have the following installed:
+- **Node.js**: v18+ recommended
+- **npm**: comes with Node.js
+- **Python 3** (optional): used for the static server for `PantryMap/frontend`
+- **Azure Functions Core Tools v4** (optional): only if running `PantryMap/functions-backend` locally
 
-* **Node.js** (v18 or later recommended)
-* **npm** (comes with Node.js)
+## Run the Next.js site (Donation Guide / About Us)
 
-You can check by running:
-
-```bash
-node -v
-npm -v
-```
-
----
-
-## Getting Started (Step-by-Step)
-
-> **Important:**
-> Do **not** run multiple `next dev` processes for the same project folder at the same time.
-> Always stop the previous dev server before starting a new one.
-
----
-
-### 1. Clone the repository
-
-Open your **Terminal** and run:
-
-```bash
-git clone https://github.com/yujunxian/cmp-donationguide-aboutus.git
-```
-
-Then move into the project folder:
-
-```bash
-cd cmp-donationguide-aboutus
-```
-
----
-
-### 2. Install dependencies  (**required**)
-
-This step is mandatory when running the project for the first time.
+From the repo root:
 
 ```bash
 npm install
+npm run dev:local
 ```
 
-You may see a message like:
+What to expect:
 
-```
-1 high severity vulnerability
-```
+- The dev server starts at **`http://127.0.0.1:3000`**
+- Pages you can open:
+  - `/` (home)
+  - `/about-us`
+  - `/food-donation-guide`
+  - `/food-donation-guide/search`
 
-This is a known npm dependency warning and **does NOT affect running the project**.
-Do **NOT** run `npm audit fix --force`.
+Notes:
 
----
+- If you see “another instance of next dev running” or port conflicts, stop the other dev server and retry. See `LOCAL_DEV.md`.
 
-### 3. Start the development server
+## Run the PantryMap (Leaflet map dashboard)
 
-To avoid conflicts with other local projects, run the app on **port 3001**:
-
-**macOS / Linux:**
-```bash
-npm run dev -- -p 3001
-```
-
-**Windows (if you encounter SWC errors, see Common Issues below):**
-```bash
-npm run dev:webpack -- -p 3001
-```
-
-If successful, you should see output similar to:
-
-```
-▲ Next.js ...
-- Local: http://localhost:3001
-✓ Ready in xxxx ms
-```
-
----
-
-### 4. Open in browser
-
-Open your browser and visit:
-
-* Home
- [http://localhost:3001](http://localhost:3001)
-
-* About Us
- [http://localhost:3001/about-us](http://localhost:3001/about-us)
-
-* Food Donation Guide
- [http://localhost:3001/food-donation-guide](http://localhost:3001/food-donation-guide)
-
-* Donation Guide Search
- [http://localhost:3001/food-donation-guide/search](http://localhost:3001/food-donation-guide/search)
-
----
-
-## Project Structure (Overview)
-
-```
-app/
-  about-us/                  About Us page
-  food-donation-guide/       Donation Guide main pages
-    search/                  Donation Guide search page
-  update/                    Update flow
-components/
-  about/                     About Us UI components
-  donation-guide/            Donation Guide UI, modals, cards
-public/
-  partners/                  Partner logos and assets
-```
-
----
-
-## Common Issues
-
-### “Unable to acquire lock … .next/dev/lock”
-
-This means another `next dev` process is already running for this project.
-
-**Fix:**
-
-1. Stop the running server with `Ctrl + C`
-2. Restart with:
-
-   ```bash
-   npm run dev -- -p 3001
-   ```
-
----
-
-### Windows: “not a valid Win32 application” / “turbo.createProject is not supported by the wasm bindings”
-
-> **Note:** This issue is **Windows-specific**. macOS and Linux users can use the default `npm run dev -- -p 3001` command without any issues.
-
-On Windows, the native SWC binary (`@next/swc-win32-x64-msvc`) may fail to load. Next.js then falls back to WASM, which does not support Turbopack, so the dev server can error.
-
-**Option A – Use Webpack instead of Turbopack (quick fix):**
+The map dashboard is a separate static frontend under `PantryMap/frontend/`.
 
 ```bash
-npm run dev:webpack -- -p 3001
+npm run dev:map
 ```
 
-**Option B – Fix the native SWC binary (recommended for best performance):**
+What to expect:
 
-1. Install **Microsoft Visual C++ Redistributable (x64)**:  
-   [https://aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe)
-2. Ensure you use **64-bit Node.js** (not 32-bit). Check with:  
-   `node -p "process.arch"` → should show `x64`
-3. Delete `node_modules` and `.next`, then reinstall:  
-   `rmdir /s /q node_modules .next 2>nul & npm install`  
-   Then run:  
-   `npm run dev -- -p 3001`
+- A static server starts at **`http://localhost:8080`**
+- You should see a map with markers and a side panel when clicking markers
 
----
+## Run the PantryMap Azure Functions backend (optional, recommended)
 
-## Notes
+This provides APIs such as `/api/health` for local integration.
 
-* `node_modules/` and `.next/` are intentionally **excluded** from GitHub via `.gitignore`
-* This repository is designed to run **independently** from the main CMP pantry system
-* All changes must be committed and pushed manually:
+```bash
+npm run dev:backend
+```
 
-  ```bash
-  git add .
-  git commit -m "Your message"
-  git push
-  ```
->>>>>>> 731ef9a6a9b5e558b5278083ac2283ad0bc50a41
+What to expect:
+
+- API root at **`http://localhost:7071/api`**
+- Health check at **`http://localhost:7071/api/health`**
+
+More details: `LOCAL_DEV.md` and `PantryMap/run_local.md`.
+
+## Environment variables (Next.js → PantryMap iframe)
+
+Some pages embed the PantryMap via `NEXT_PUBLIC_PANTRY_MAP_URL`.
+
+- Setup guide: `NEXTJS_ENVIRONMENT_SETUP.md`
