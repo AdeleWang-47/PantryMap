@@ -283,7 +283,7 @@ const DonorNoteModal: React.FC<DonorNoteModalProps> = ({ onClose, onSubmit }) =>
         </form>
       </div>
     </div>,
-    document.body
+    document.body!
   );
 };
 
@@ -348,7 +348,7 @@ const WishlistModal: React.FC<WishlistModalProps> = ({ onClose, onSubmit }) => {
         </form>
       </div>
     </div>,
-    document.body
+    document.body!
   );
 };
 
@@ -408,7 +408,7 @@ const MessageModal: React.FC<MessageModalProps> = ({ onClose, onSubmit }) => {
         </form>
       </div>
     </div>,
-    document.body
+    document.body!
   );
 };
 
