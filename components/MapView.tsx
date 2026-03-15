@@ -5,10 +5,13 @@ import { useEffect, useRef } from "react";
 import type { Map, LayerGroup } from "leaflet";
 import type { Pantry } from "@/lib/pantry-types";
 
+export type MapBounds = { north: number; south: number; east: number; west: number };
+
 type MapViewProps = {
   pantries: Pantry[];
   selectedPantryId: string | null;
   onSelectPantry: (id: string) => void;
+  onBoundsChange?: (bounds: MapBounds) => void;
 };
 
 function getMarkerIcon(L: typeof import("leaflet"), pantry: Pantry, isSelected: boolean) {
@@ -50,10 +53,13 @@ export function MapView({
   pantries,
   selectedPantryId,
   onSelectPantry,
+  onBoundsChange,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const markersLayerRef = useRef<LayerGroup | null>(null);
+  const onBoundsChangeRef = useRef(onBoundsChange);
+  useEffect(() => { onBoundsChangeRef.current = onBoundsChange; }, [onBoundsChange]);
 
   // Initialize map once on mount
   useEffect(() => {
@@ -111,6 +117,20 @@ export function MapView({
         return div;
       };
       legend.addTo(map);
+
+      function emitBounds() {
+        const b = map.getBounds();
+        onBoundsChangeRef.current?.({
+          north: b.getNorth(),
+          south: b.getSouth(),
+          east:  b.getEast(),
+          west:  b.getWest(),
+        });
+      }
+
+      map.on("moveend", emitBounds);
+      // Fire once after the initial tile load so the list reflects the starting view
+      map.whenReady(() => setTimeout(emitBounds, 100));
 
       if (!cancelled) {
         mapRef.current = map;

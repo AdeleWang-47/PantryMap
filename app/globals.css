@@ -198,6 +198,7 @@ body {
 
 .detail-hero-cover {
   position: relative;
+  overflow: hidden; /* contain the hero image so it never bleeds into the body */
 }
 
 .detail-hero-cover img.detail-hero-img {
@@ -225,6 +226,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0; /* allow flex children to shrink below intrinsic size */
+  background: var(--panel); /* ensure text is never obscured by image overflow */
+  position: relative; /* paint on top of any image that overflows the cover */
+  z-index: 1;
 }
 
 .detail-title {
@@ -232,12 +237,17 @@ body {
   font-size: 22px;
   font-weight: 700;
   color: var(--text);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .detail-subline {
   color: var(--muted);
   font-size: 14px;
   font-weight: 500;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* ─── Detail Sections (shared wrapper) ───────────────────────── */
@@ -1236,6 +1246,32 @@ body {
   cursor: pointer;
 }
 
+.donor-note-photo-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text);
+}
+.donor-note-photo-label input[type="file"] {
+  font-size: 13px;
+  cursor: pointer;
+}
+.donor-note-photo-preview {
+  margin-top: 4px;
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 100%;
+}
+.donor-note-photo-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
 .donor-note-modal-error {
   color: var(--danger);
   font-size: 13px;
@@ -1488,7 +1524,8 @@ ol.list-decimal > li::marker {
   .detail-hero-cover {
     height: 160px;
   }
-  .detail-hero-img {
+  /* Use matching specificity to override the desktop rule (.detail-hero-cover img.detail-hero-img) */
+  .detail-hero-cover img.detail-hero-img {
     height: 160px;
   }
   /* donor-notes, wishlist, message cards: reduce padding on mobile */

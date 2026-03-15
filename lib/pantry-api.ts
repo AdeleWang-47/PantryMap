@@ -35,12 +35,14 @@ function firstNumber(values: unknown[]): number | null {
   return null;
 }
 
-// Weight thresholds matching the legacy frontend
+// Weight thresholds matching the final legacy frontend:
+// <=5 kg → Low; 5<w<20 kg → Medium; >=20 kg → High
+// high_weight=20 with strict < so that high_donation (25 kg) correctly reaches High.
 const STOCK_PARAMS = {
   reasonableMin: -2,
   reasonableMax: 150,
   low_weight: 5,
-  high_weight: 25, // matches legacy: <=5 low, 5<w<=25 medium, >25 high
+  high_weight: 20, // >=20 kg = High/Full (e.g. 1× high_donation or 2× medium_donation)
 };
 
 function isWeightInReasonableRange(weightKg: unknown): boolean {
@@ -54,7 +56,7 @@ function computeStockLevelFromWeight(weightKg: unknown) {
   if (n === null || !isWeightInReasonableRange(n)) return null;
   if (n <= STOCK_PARAMS.low_weight)
     return { level: "low", label: "Low Stock", cls: "low" as const };
-  if (n <= STOCK_PARAMS.high_weight)
+  if (n < STOCK_PARAMS.high_weight)
     return { level: "medium", label: "Medium Stock", cls: "medium" as const };
   return { level: "high", label: "High Stock", cls: "high" as const };
 }
@@ -614,6 +616,53 @@ export async function addWishlistItem(
 }
 
 // -------- Messages --------
+
+/**
+ * Get a temporary SAS read URL for a private Azure Blob donation photo.
+ * The raw blobUrl stored in the donation record is private; this endpoint
+ * returns a short-lived signed URL that can be used in <img src>.
+ */
+export async function getDonationReadSas(
+  blobUrl: string,
+): Promise<string | null> {
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl.replace(/\/+$/, "")}/uploads/donations/read-sas?blobUrl=${encodeURIComponent(blobUrl)}`;
+  try {
+    const data = await fetchJson<{ readUrl?: string }>(url);
+    return data?.readUrl ?? null;
+  } catch (e) {
+    console.warn("getDonationReadSas failed for", blobUrl, e);
+    return null;
+  }
+}
+
+/**
+ * Upload a single photo for a donation record.
+ * POSTs as multipart/form-data to /uploads/donations/upload.
+ * Returns the blob URL to include in the donation payload's photoUrls array.
+ */
+export async function uploadDonationPhoto(
+  pantryId: string,
+  file: File,
+): Promise<string> {
+  const baseUrl = getApiBaseUrl();
+  const normalizedId = String(pantryId).replace(/^p-/i, "");
+  const form = new FormData();
+  form.append("pantryId", normalizedId);
+  form.append("file", file, file.name);
+
+  const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/uploads/donations/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(detail || `Upload failed (${res.status})`);
+  }
+  const data = await res.json();
+  if (!data?.blobUrl) throw new Error("Upload succeeded but no blobUrl returned.");
+  return data.blobUrl as string;
+}
 
 export interface MessageItem {
   id?: string;

@@ -16,7 +16,12 @@ import {
   postMessage,
   fetchLiveTelemetryStock,
   getDonationBasedStock,
+  uploadDonationPhoto,
+  getDonationReadSas,
 } from "@/lib/pantry-api";
+
+// Module-level SAS URL cache: blobUrl → readUrl (matches legacy donationReadUrlCache)
+const donationReadUrlCache: Record<string, string> = {};
 
 /* ─── constants ───────────────────────────────────────────────── */
 const PHOTO_PLACEHOLDER = "/pantry-placeholder.svg";
@@ -194,17 +199,48 @@ const WishlistBubblePack: React.FC<WishlistBubblePackProps> = ({ items, onBubble
   );
 };
 
+/* ─── DonationPhoto — resolves private blob URL to SAS read URL ── */
+function DonationPhoto({ blobUrl, alt }: { blobUrl: string; alt: string }) {
+  const [src, setSrc] = useState<string | null>(
+    donationReadUrlCache[blobUrl] ?? null
+  );
+  useEffect(() => {
+    if (donationReadUrlCache[blobUrl]) { setSrc(donationReadUrlCache[blobUrl]); return; }
+    // Only fetch SAS for private Azure Blob URLs (no existing SAS query string)
+    if (blobUrl.includes(".blob.core.windows.net") && !blobUrl.includes("?")) {
+      getDonationReadSas(blobUrl).then((readUrl) => {
+        if (readUrl) { donationReadUrlCache[blobUrl] = readUrl; setSrc(readUrl); }
+        else setSrc(blobUrl); // fallback: try direct (may fail for private blobs)
+      });
+    } else {
+      setSrc(blobUrl); // already public or already has SAS
+    }
+  }, [blobUrl]);
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/pantry-placeholder.svg"; }}
+    />
+  );
+}
+
 /* ─── Donor Note Modal ────────────────────────────────────────── */
 interface DonorNoteModalProps {
   onClose: () => void;
-  onSubmit: (size: string, categories: string[], note: string) => Promise<void>;
+  pantryId: string;
+  onSubmit: (size: string, categories: string[], note: string, photoUrls: string[]) => Promise<void>;
 }
 
-const DonorNoteModal = ({ onClose, onSubmit }: DonorNoteModalProps) => {
+const DonorNoteModal = ({ onClose, pantryId, onSubmit }: DonorNoteModalProps) => {
   const [size, setSize] = useState("");
   const [categories, setCategories] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done">("idle");
   const [error, setError] = useState("");
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -219,20 +255,37 @@ const DonorNoteModal = ({ onClose, onSubmit }: DonorNoteModalProps) => {
     });
   };
 
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setPhotoFile(file);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!size) { setError("Please select how much you are donating in total."); return; }
     setSubmitting(true);
     try {
-      await onSubmit(size, Array.from(categories), note);
+      let photoUrls: string[] = [];
+      if (photoFile) {
+        setUploadStatus("uploading");
+        const blobUrl = await uploadDonationPhoto(pantryId, photoFile);
+        photoUrls = [blobUrl];
+        setUploadStatus("done");
+      }
+      await onSubmit(size, Array.from(categories), note, photoUrls);
       onClose();
     } catch (err: any) {
+      setUploadStatus("idle");
       setError(err?.message || "Failed to submit. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
+
+  const submitLabel = uploadStatus === "uploading" ? "Uploading photo…" : submitting ? "Submitting…" : "Submit";
 
   return createPortal(
     <div className="donor-note-modal-overlay" onClick={handleOverlayClick}>
@@ -278,11 +331,26 @@ const DonorNoteModal = ({ onClose, onSubmit }: DonorNoteModalProps) => {
               disabled={submitting}
             />
           </label>
+          <label className="donor-note-photo-label">
+            <span>Post a photo (optional)</span>
+            <input
+              type="file"
+              name="photo"
+              accept="image/*"
+              onChange={handlePhotoChange}
+              disabled={submitting}
+            />
+          </label>
+          {photoPreview && (
+            <div className="donor-note-photo-preview">
+              <img src={photoPreview} alt="Preview" />
+            </div>
+          )}
           {error && <div className="donor-note-modal-error">{error}</div>}
           <div className="donor-note-modal-actions">
             <button type="button" className="donor-note-modal-cancel" onClick={onClose} disabled={submitting}>Cancel</button>
             <button type="submit" className="donor-note-modal-submit" disabled={submitting}>
-              {submitting ? "Submitting…" : "Submit"}
+              {submitLabel}
             </button>
           </div>
         </form>
@@ -428,9 +496,11 @@ const MessageModal = ({ onClose, onSubmit }: MessageModalProps) => {
 /* ─── PantryDetail ────────────────────────────────────────────── */
 export interface PantryDetailProps {
   pantry: Pantry;
+  /** Called when a donation is submitted and live stock is updated, so the list can sync. */
+  onStockUpdate?: (pantryId: string, stock: StockInfo) => void;
 }
 
-export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry }) => {
+export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry, onStockUpdate }) => {
   const photosArr = Array.isArray(pantry.photos) ? pantry.photos : [];
   const photoUrl = photosArr.length > 0 ? photosArr[0] : "";
   const addressText = pantry.address || "Address unknown";
@@ -440,17 +510,21 @@ export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry }) => {
   const [liveStock, setLiveStock] = useState<StockInfo | null>(null);
   useEffect(() => {
     setLiveStock(null);
-    // Prefer sensor telemetry; fall back to donation-based stock for non-sensor pantries
+    // Prefer sensor telemetry; fall back to donation-based stock for non-sensor pantries.
+    // Also propagate the resolved live stock back to the parent list so the card stays in sync.
     Promise.allSettled([
       fetchLiveTelemetryStock(pantry.id),
       getDonationBasedStock(pantry.id),
     ]).then(([telRes, donRes]) => {
       const tel = telRes.status === "fulfilled" ? telRes.value : null;
       const don = donRes.status === "fulfilled" ? donRes.value : null;
-      if (tel) setLiveStock(tel);
-      else if (don) setLiveStock(don);
+      const resolved = tel ?? don ?? null;
+      if (resolved) {
+        setLiveStock(resolved);
+        onStockUpdate?.(pantry.id, resolved);
+      }
     });
-  }, [pantry.id]);
+  }, [pantry.id, onStockUpdate]);
   const stock = liveStock ?? pantry.stock ?? null;
 
   /* ── Donations ─────────────────────────────────────── */
@@ -501,7 +575,7 @@ export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry }) => {
     : [];
 
   /* ── handlers ──────────────────────────────────────── */
-  const handleDonationSubmit = async (size: string, categories: string[], note: string) => {
+  const handleDonationSubmit = async (size: string, categories: string[], note: string, photoUrls: string[]) => {
     const baseUrl = process.env.NEXT_PUBLIC_PANTRY_API_BASE_URL || "http://localhost:7071/api";
     const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/donations`, {
       method: "POST",
@@ -511,6 +585,7 @@ export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry }) => {
         donationSize: size,
         donationItems: categories.length > 0 ? categories : undefined,
         note: note || undefined,
+        photoUrls: photoUrls.length > 0 ? photoUrls : undefined,
       }),
     });
     if (!res.ok) {
@@ -518,9 +593,12 @@ export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry }) => {
       throw new Error(text || `Failed (${res.status})`);
     }
     loadDonations();
-    // Refresh stock badge to reflect the new donation
+    // Refresh stock badge and propagate to the parent list
     getDonationBasedStock(pantry.id).then((s) => {
-      if (s) setLiveStock(s);
+      if (s) {
+        setLiveStock(s);
+        onStockUpdate?.(pantry.id, s);
+      }
     });
   };
 
@@ -552,6 +630,7 @@ export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry }) => {
       {showDonorModal && (
         <DonorNoteModal
           onClose={() => setShowDonorModal(false)}
+          pantryId={pantry.id}
           onSubmit={handleDonationSubmit}
         />
       )}
@@ -617,11 +696,7 @@ export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry }) => {
               <article key={d.id ?? idx} className="donor-note-card">
                 {Array.isArray(d.photoUrls) && d.photoUrls.length > 0 && (
                   <div className="donor-note-media">
-                    <img
-                      src={d.photoUrls[0]}
-                      alt="Donation photo"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = PHOTO_PLACEHOLDER; }}
-                    />
+                    <DonationPhoto blobUrl={d.photoUrls[0]} alt="Donation photo" />
                   </div>
                 )}
                 {sizeLabel && (
