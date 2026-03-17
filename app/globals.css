@@ -1253,9 +1253,37 @@ body {
   font-size: 14px;
   color: var(--text);
 }
-.donor-note-photo-label input[type="file"] {
+.donor-note-photo-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.donor-note-photo-btn {
+  padding: 6px 14px;
   font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
   cursor: pointer;
+  white-space: nowrap;
+}
+.donor-note-photo-btn:hover:not(:disabled) {
+  background: var(--bg);
+}
+.donor-note-photo-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.donor-note-photo-filename {
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
 }
 .donor-note-photo-preview {
   margin-top: 4px;

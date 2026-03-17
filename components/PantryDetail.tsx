@@ -242,6 +242,7 @@ const DonorNoteModal = ({ onClose, pantryId, onSubmit }: DonorNoteModalProps) =>
   const [submitting, setSubmitting] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done">("idle");
   const [error, setError] = useState("");
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose();
@@ -331,16 +332,31 @@ const DonorNoteModal = ({ onClose, pantryId, onSubmit }: DonorNoteModalProps) =>
               disabled={submitting}
             />
           </label>
-          <label className="donor-note-photo-label">
+          <div className="donor-note-photo-label">
             <span>Post a photo (optional)</span>
-            <input
-              type="file"
-              name="photo"
-              accept="image/*"
-              onChange={handlePhotoChange}
-              disabled={submitting}
-            />
-          </label>
+            <div className="donor-note-photo-pick">
+              <input
+                ref={photoInputRef}
+                type="file"
+                name="photo"
+                accept="image/*"
+                onChange={handlePhotoChange}
+                disabled={submitting}
+                style={{ display: "none" }}
+              />
+              <button
+                type="button"
+                className="donor-note-photo-btn"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={submitting}
+              >
+                Choose File
+              </button>
+              {photoFile && (
+                <span className="donor-note-photo-filename">{photoFile.name}</span>
+              )}
+            </div>
+          </div>
           {photoPreview && (
             <div className="donor-note-photo-preview">
               <img src={photoPreview} alt="Preview" />
@@ -593,11 +609,18 @@ export const PantryDetail: React.FC<PantryDetailProps> = ({ pantry, onStockUpdat
       throw new Error(text || `Failed (${res.status})`);
     }
     loadDonations();
-    // Refresh stock badge and propagate to the parent list
-    getDonationBasedStock(pantry.id).then((s) => {
-      if (s) {
-        setLiveStock(s);
-        onStockUpdate?.(pantry.id, s);
+    // Re-fetch stock using the same priority as on mount:
+    // sensor telemetry wins; donation-based is only used when no sensor is connected.
+    Promise.allSettled([
+      fetchLiveTelemetryStock(pantry.id),
+      getDonationBasedStock(pantry.id),
+    ]).then(([telRes, donRes]) => {
+      const tel = telRes.status === "fulfilled" ? telRes.value : null;
+      const don = donRes.status === "fulfilled" ? donRes.value : null;
+      const resolved = tel ?? don ?? null;
+      if (resolved) {
+        setLiveStock(resolved);
+        onStockUpdate?.(pantry.id, resolved);
       }
     });
   };
