@@ -9,7 +9,10 @@ import type { MapBounds } from "@/components/MapView";
 
 // ── LocalStorage cache for live stock levels ──────────────────────
 const STOCK_CACHE_KEY = "pantrylink_stock_cache_v1";
-const STOCK_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min: re-fetch if stale
+// Differentiated TTLs: sensor data changes quickly; donation data is slower-moving.
+const STOCK_CACHE_TTL_SENSOR_MS   =  5 * 60 * 1000; //  5 min — sensor weight can shift fast
+const STOCK_CACHE_TTL_DONATION_MS = 20 * 60 * 1000; // 20 min — donation patterns are slower
+const STOCK_CACHE_TTL_UNKNOWN_MS  = 10 * 60 * 1000; // 10 min — recheck emptied pantries
 
 interface StockCacheEntry {
   level: StockInfo["level"];
@@ -35,6 +38,12 @@ function writeStockCache(cache: StockCache) {
 
 function stockInfoFromCacheEntry(e: StockCacheEntry): StockInfo {
   return { level: e.level, lastUpdateIso: e.lastUpdateIso, lastUpdateSource: e.lastUpdateSource, sensorWeightKg: e.sensorWeightKg };
+}
+
+function getCacheTTL(entry: StockCacheEntry): number {
+  if (entry.lastUpdateSource === "sensor") return STOCK_CACHE_TTL_SENSOR_MS;
+  if (entry.lastUpdateSource === "self")   return STOCK_CACHE_TTL_DONATION_MS;
+  return STOCK_CACHE_TTL_UNKNOWN_MS;
 }
 
 function stockLabel(level: StockInfo["level"]) {
@@ -96,18 +105,40 @@ export default function MapPage() {
       })
     );
 
-    // Fetch one pantry and update only if the level changed
+    // Fetch one pantry and update only if the level changed.
+    // B1: only call the endpoint that is relevant for this pantry type.
+    // B5: if the pantry doc already provided a known donation-based stock, cache it
+    //     immediately without making any network request.
     async function fetchAndUpdate(p: Pantry) {
+      const isSensorPantry = p.stockLevelSource === "sensor";
+
+      // B5: pantry document already has a valid non-sensor stock level — no fetch needed.
+      const docHasStock =
+        !isSensorPantry &&
+        p.stockLevelCls != null &&
+        p.stockLevelCls !== "unknown" &&
+        p.stock != null;
+
+      if (docHasStock) {
+        // Persist the doc-supplied stock to cache so subsequent visits are instant too.
+        const entry: StockCacheEntry = { ...p.stock!, cachedAt: now };
+        const fresh = readStockCache();
+        fresh[p.id] = entry;
+        writeStockCache(fresh);
+        return; // nothing to re-render — list already shows the correct value
+      }
+
+      // B1: only call the relevant endpoint (sensor OR donation, not both every time).
       const [telRes, donRes] = await Promise.allSettled([
-        fetchLiveTelemetryStock(p.id),
-        getDonationBasedStock(p.id),
+        isSensorPantry ? fetchLiveTelemetryStock(p.id) : Promise.resolve(null),
+        isSensorPantry ? Promise.resolve(null)          : getDonationBasedStock(p.id),
       ]);
       const tel = telRes.status === "fulfilled" ? telRes.value : null;
       const don = donRes.status === "fulfilled" ? donRes.value : null;
       const resolved = tel ?? don ?? null;
       if (!resolved) return;
 
-      // Persist to cache
+      // Persist to cache using source-appropriate TTL bucket marker
       const newEntry: StockCacheEntry = { ...resolved, cachedAt: now };
       const fresh = readStockCache();
       fresh[p.id] = newEntry;
@@ -128,16 +159,16 @@ export default function MapPage() {
     const deferred = pantries.slice(10);
 
     priority.forEach((p) => {
-      // Skip if cache is fresh enough
       const entry = cache[p.id];
-      if (entry && now - entry.cachedAt < STOCK_CACHE_TTL_MS) return;
+      // Use source-specific TTL: sensor data expires sooner than donation data
+      if (entry && now - entry.cachedAt < getCacheTTL(entry)) return;
       fetchAndUpdate(p);
     });
 
     const timer = setTimeout(() => {
       deferred.forEach((p) => {
         const entry = cache[p.id];
-        if (entry && now - entry.cachedAt < STOCK_CACHE_TTL_MS) return;
+        if (entry && now - entry.cachedAt < getCacheTTL(entry)) return;
         fetchAndUpdate(p);
       });
     }, 2000);
