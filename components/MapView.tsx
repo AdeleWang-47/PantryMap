@@ -191,5 +191,17 @@ export function MapView({
     );
   }, [selectedPantryId, pantries]);
 
+  // Invalidate Leaflet size whenever the container is resized (e.g. sidebar collapse/expand).
+  // Without this, Leaflet leaves a grey unpainted strip in the newly-exposed area.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      mapRef.current?.invalidateSize();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return <div ref={containerRef} className="h-full w-full" />;
 }
